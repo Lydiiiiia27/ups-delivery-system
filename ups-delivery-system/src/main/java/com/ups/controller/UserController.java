@@ -9,6 +9,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 
+import java.security.Principal;
+import java.util.Optional;
+
 @Controller
 public class UserController {
     
@@ -41,8 +44,20 @@ public class UserController {
         return "login";
     }
     
-    @GetMapping("/dashboard")
-    public String showDashboard() {
-        return "dashboard";
+    @GetMapping("/profile")
+    public String showUserProfile(Model model, Principal principal) {
+        if (principal == null) {
+            return "redirect:/login";
+        }
+        
+        String username = principal.getName();
+        Optional<User> userOpt = userService.findByUsername(username);
+        
+        if (userOpt.isPresent()) {
+            model.addAttribute("user", userOpt.get());
+            return "profile";
+        } else {
+            return "redirect:/login";
+        }
     }
 }
