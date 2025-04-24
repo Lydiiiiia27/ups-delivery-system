@@ -9,29 +9,39 @@ import java.net.Socket;
 public class WorldConnector {
     private Socket socket;
 
-    public WorldConnector(String host, int port) throws IOException {
-        this.socket = new Socket(host, port);
+    public WorldConnector(String host, int port, List<Truck> trucks) throws IOException {
         try {
-           connect(1, false);
+            this.socket = new Socket(host, port);
+            connect(1, false, trucks);
         }
         // catch (com.google.protobuf.InvalidProtocolBufferException e) {
         //     connect(1, true);
         // }
         catch (IllegalArgumentException e) {
             this.socket = new Socket(host, port);
-            connect(1, true);
+            connect(1, true, trucks);
         }
     }
 
-    private void connect(int worldId, boolean newWorld) throws IOException {
+    private void connect(int worldId, boolean newWorld, List<Truck> trucks) throws IOException {
         // === 1. Create UConnect request ===
         WorldUps1.UConnect.Builder connectBuilder = WorldUps1.UConnect.newBuilder();
         if (!newWorld) {
             connectBuilder.setWorldid(worldId);
         }
+        if (trucks != null && trucks.size() > 0) {
+            WorldUps1.UInitTruck.Builder truckBuilder = WorldUps1.UInitTruck.newBuilder();
+            for (Truck truck : trucks) {
+                truckBuilder.setId(truck.getId());
+                Location loc = truck.getLocation();
+                truckBuilder.setX(loc.getX());
+                truckBuilder.setY(loc.getY());
+                WorldUps1.UInitTruck truckRequest = truckBuilder.build();
+                connectBuilder.addTrucks(truckRequest);
+            }
+        }
         connectBuilder.setIsAmazon(false); // false means UPS
         WorldUps1.UConnect connectRequest = connectBuilder.build();
-
         sendMessage(connectRequest);
 
         // === 2. Receive UConnected response ===

@@ -14,7 +14,7 @@ import java.util.List;
 public class Main {
     public static void main(String[] args) {
         try {
-            Ups ups = new Ups("localhost", 12345, null);
+            Ups ups = new Ups("localhost", 12345, 3, new Location(5, 5));
         }
         catch (IOException e) {
             e.printStackTrace();

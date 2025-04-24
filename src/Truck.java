@@ -10,6 +10,12 @@ public class Truck {
         this.status = TruckStatus.IDLE;
     }
 
+    public Truck(Location location) {
+        this.id = getGeneralId();
+        this.location = new Location(location.getX(), location.getY());
+        this.status = TruckStatus.IDLE;
+    }
+
     private static int getGeneralId() {
         truckId++;
         return truckId;
@@ -17,5 +23,9 @@ public class Truck {
 
     public int getId() {
         return id;
+    }
+
+    public Location getLocation() {
+        return location;
     }
 }
