@@ -1,0 +1,28 @@
+version: '3'
+
+services:
+  ups-app:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      - ups-db
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://ups-db:5432/ups
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      
+  ups-db:
+    image: postgres:12-alpine3.15
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=ups
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - ups-data:/var/lib/postgresql/data
+
+volumes:
+  ups-data:
