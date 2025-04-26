@@ -1,6 +1,7 @@
 com/ups/model/entity/Package.class
 com/ups/WorldUpsProto$UDeliveryMade$Builder.class
 com/ups/model/entity/PackageStatus.class
+com/ups/model/amazon/NotifyDeliveryComplete$Location.class
 com/ups/UpsApplication.class
 com/ups/WorldUpsProto$UCommandsOrBuilder.class
 com/ups/repository/WarehouseRepository.class
@@ -8,6 +9,7 @@ com/ups/WorldUpsProto$UErr$Builder.class
 com/ups/controller/DashboardController.class
 com/ups/WorldUpsProto$UDeliveryMadeOrBuilder.class
 com/ups/repository/UserRepository.class
+com/ups/model/amazon/QueryShipmentStatusResponse$Location.class
 com/ups/WorldUpsProto$UCommands$1.class
 com/ups/repository/TruckRepository.class
 com/ups/WorldUpsProto$UTruck.class
@@ -17,6 +19,7 @@ com/ups/WorldUpsProto$UGoDeliver.class
 com/ups/WorldUpsProto$UDeliveryLocation$1.class
 com/ups/WorldUpsProto$UGoPickup$Builder.class
 com/ups/WorldUpsProto$UFinished$Builder.class
+com/ups/model/amazon/QueryShipmentStatusResponse.class
 com/ups/model/amazon/CreateShipmentResponse.class
 com/ups/WorldUpsProto$UConnect.class
 com/ups/controller/UserController.class
@@ -29,11 +32,13 @@ com/ups/WorldUpsProto$UGoPickup$1.class
 com/ups/model/entity/User.class
 com/ups/WorldUpsProto$UConnected.class
 com/ups/WorldUpsProto$UResponses.class
+com/ups/model/amazon/UpdateShipmentStatus$Location.class
 com/ups/model/amazon/CreateShipmentRequest$Item.class
 com/ups/WorldUpsProto$UInitTruck$Builder.class
 com/ups/WorldUpsProto$UConnected$Builder.class
 com/ups/WorldUpsProto$UDeliveryMade.class
 com/ups/WorldUpsProto$UGoPickup.class
+com/ups/service/MessageTrackingService$MessageRecord.class
 com/ups/WorldUpsProto.class
 com/ups/service/world/Ups.class
 com/ups/config/SecurityConfig.class
@@ -42,6 +47,7 @@ com/ups/WorldUpsProto$UInitTruck.class
 com/ups/WorldUpsProto$UConnect$Builder.class
 com/ups/WorldUpsProto$UCommands.class
 com/ups/WorldUpsProto$UResponsesOrBuilder.class
+com/ups/model/amazon/QueryShipmentStatusRequest.class
 com/ups/WorldUpsProto$UResponses$1.class
 com/ups/controller/TrackingController.class
 com/ups/service/impl/ShipmentServiceImpl.class
@@ -54,10 +60,12 @@ com/ups/model/Location.class
 com/ups/model/amazon/ChangeDestinationResponse.class
 com/ups/WorldUpsProto$UQuery$Builder.class
 com/ups/model/amazon/ChangeDestinationRequest$Destination.class
+com/ups/service/MessageTrackingService.class
 com/ups/WorldUpsProto$UCommands$Builder.class
 com/ups/service/UserService.class
 com/ups/repository/PackageRepository.class
 com/ups/WorldUpsProto$UTruck$Builder.class
+com/ups/model/amazon/UPSGeneralError.class
 com/ups/WorldUpsProto$UFinished.class
 com/ups/model/entity/Warehouse.class
 com/ups/WorldUpsProto$UGoDeliverOrBuilder.class
@@ -66,7 +74,10 @@ com/ups/WorldUpsProto$UConnectOrBuilder.class
 com/ups/WorldUpsProto$UDeliveryLocation.class
 com/ups/model/amazon/ChangeDestinationRequest.class
 com/ups/service/PackageItemService.class
+com/ups/model/amazon/NotifyTruckArrived.class
 com/ups/WorldUpsProto$UDeliveryMade$1.class
+com/ups/model/amazon/NotifyDeliveryComplete.class
+com/ups/model/amazon/UpdateShipmentStatus.class
 com/ups/WorldUpsProto$UTruck$1.class
 com/ups/WorldUpsProto$UErr$1.class
 com/ups/WorldUpsProto$UQuery$1.class
