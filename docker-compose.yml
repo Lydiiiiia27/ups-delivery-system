@@ -1,8 +1,23 @@
 version: '3'
-
 services:
+  # UPS application only
+  ups-db:
+    image: postgres:12-alpine3.15
+    container_name: ups-db
+    environment:
+      POSTGRES_DB: ups
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ups-data:/var/lib/postgresql/data
+    networks:
+      - ups-network
+
   ups-app:
-    build: .
+    build:
+      context: ./ups-delivery-system
+      dockerfile: Dockerfile
+    container_name: ups-app
     ports:
       - "8080:8080"
     depends_on:
@@ -12,17 +27,28 @@ services:
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=postgres
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
-      
-  ups-db:
-    image: postgres:12-alpine3.15
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_DB=ups
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - UPS_WORLD_HOST=world-simulator_server_1
+      - UPS_WORLD_PORT=12345
+      - UPS_INIT_TRUCKS=5
+      - UPS_WORLD_SIM_SPEED=100
+    command: >
+      /bin/sh -c "
+        chmod +x ./wait-for-it.sh &&
+        ./wait-for-it.sh ups-db:5432 --timeout=30 --strict -- 
+        ./wait-for-it.sh world-simulator:12345 --timeout=30 --strict -- 
+        java -jar app.jar
+      "
     volumes:
-      - ups-data:/var/lib/postgresql/data
+      - ./wait-for-it.sh:/app/wait-for-it.sh
+    networks:
+      - ups-network
+      - world-simulator_default  # Connect to the network created by world-simulator
+
+networks:
+  ups-network:
+    driver: bridge
+  world-simulator_default:  # This network will be created by the world-simulator
+    external: true  # Use the existing network created by world-simulator
 
 volumes:
   ups-data:

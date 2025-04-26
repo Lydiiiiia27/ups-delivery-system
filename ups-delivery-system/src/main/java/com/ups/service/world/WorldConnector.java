@@ -146,22 +146,50 @@ public class WorldConnector {
         logger.info("Simulation speed set to: {}", speed);
     }
     
+    /**
+     * Disconnects from the world simulator and cleans up resources.
+     * 
+     * @throws IOException If disconnection fails
+     */
     public void disconnect() throws IOException {
-        WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
-        commandsBuilder.setDisconnect(true);
-        WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
+        if (socket == null || socket.isClosed()) {
+            logger.info("Already disconnected from world simulator");
+            return;
+        }
         
-        WorldUpsProto.UResponses responses = sendAndReceive(commandsRequest);
-        processResponse(responses);
-        
-        if (responses.hasFinished() && responses.getFinished()) {
-            logger.info("Successfully disconnected from world simulator");
-            if (socket != null && !socket.isClosed()) {
-                socket.close();
+        try {
+            // Send disconnect command
+            WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
+            commandsBuilder.setDisconnect(true);
+            WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
+            
+            WorldUpsProto.UResponses responses = sendAndReceive(commandsRequest);
+            processResponse(responses);
+            
+            if (responses.hasFinished() && responses.getFinished()) {
+                logger.info("Successfully disconnected from world simulator for world ID: {}", worldId);
+            } else {
+                logger.warn("World simulator did not confirm disconnect for world ID: {}", worldId);
             }
+        } catch (Exception e) {
+            logger.warn("Error during disconnect from world simulator: {}", e.getMessage());
+        } finally {
+            // Always close the socket
+            try {
+                if (socket != null && !socket.isClosed()) {
+                    socket.close();
+                    logger.info("Socket closed for world ID: {}", worldId);
+                }
+            } catch (IOException e) {
+                logger.warn("Error closing socket: {}", e.getMessage());
+            }
+            
+            // Reset state
+            this.socket = null;
+            this.seqNum.set(1);
+            this.worldId = null;
         }
     }
-
     private WorldUpsProto.UResponses sendAndReceive(WorldUpsProto.UCommands commandsRequest) throws IOException {
         sendMessage(commandsRequest);
         WorldUpsProto.UResponses response = receiveMessage(WorldUpsProto.UResponses.parser());
@@ -265,6 +293,26 @@ public class WorldConnector {
         connector.disconnect();
     } catch (Exception e) {
         e.printStackTrace();
+        }
+    }
+        /**
+     * Connects to the world simulator with a new world for testing purposes.
+     * 
+     * @param host The world simulator host
+     * @param port The world simulator port
+     * @param trucks The list of trucks to initialize
+     * @return The new world ID
+     * @throws IOException If connection fails
+     */
+    public Long connectWithNewWorld(String host, int port, List<Truck> trucks) throws IOException {
+        try {
+            this.socket = new Socket(host, port);
+            // Always create a new world (newWorld = true)
+            connect(0, true, trucks);
+            return this.worldId;
+        } catch (Exception e) {
+            logger.error("Failed to connect to world simulator with new world: {}", e.getMessage());
+            throw e;
         }
     }
 }
