@@ -22,10 +22,10 @@
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/controller/TrackingController.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/service/impl/ShipmentServiceImpl.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/service/UserService.java
-/home/jt454/erss-project-ys467-jt454/ups-delivery-system/target/generated-sources/protobuf/java/com/ups/WorldUps1.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/controller/AmazonApiController.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/model/entity/Package.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/model/entity/Warehouse.java
+/home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/model/amazon/ChangeDestinationRequest.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/UpsApplication.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/target/generated-sources/protobuf/java/com/ups/WorldUpsProto.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/controller/UserController.java

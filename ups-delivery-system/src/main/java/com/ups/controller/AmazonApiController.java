@@ -2,6 +2,8 @@ package com.ups.controller;
 
 import com.ups.model.amazon.CreateShipmentRequest;
 import com.ups.model.amazon.CreateShipmentResponse;
+import com.ups.model.amazon.ChangeDestinationRequest;
+import com.ups.model.amazon.ChangeDestinationResponse;
 import com.ups.service.ShipmentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,5 +48,20 @@ public class AmazonApiController {
             logger.error("Error processing shipment request", e);
             return ResponseEntity.internalServerError().build();
         }
+    }
+    
+    @PostMapping("/changedestination")
+    public ResponseEntity<ChangeDestinationResponse> changeDestination(@RequestBody ChangeDestinationRequest request) {
+        logger.info("Received changedestination request for package: {}", request.getPackageId());
+        
+        // Create placeholder response - to be implemented
+        ChangeDestinationResponse response = new ChangeDestinationResponse();
+        response.setMessageType("ChangeDestinationResponse");
+        response.setSeqNum(request.getSeqNum() + 100); // Just a placeholder
+        response.setAck(request.getSeqNum());
+        response.setTimestamp(Instant.now());
+        response.setStatus("UPDATED");
+        
+        return ResponseEntity.ok(response);
     }
 }

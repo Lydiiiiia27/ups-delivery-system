@@ -9,6 +9,7 @@ import com.ups.repository.TruckRepository;
 import com.ups.repository.UserRepository;
 import com.ups.repository.WarehouseRepository;
 import com.ups.service.ShipmentService;
+import com.ups.service.world.Ups;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     private final UserRepository userRepository;
     private final TruckRepository truckRepository;
     private final WarehouseRepository warehouseRepository;
+    private final Ups ups;
     
     @Autowired
     public ShipmentServiceImpl(
@@ -37,12 +39,14 @@ public class ShipmentServiceImpl implements ShipmentService {
             PackageItemRepository packageItemRepository,
             UserRepository userRepository,
             TruckRepository truckRepository,
-            WarehouseRepository warehouseRepository) {
+            WarehouseRepository warehouseRepository,
+            Ups ups) {
         this.packageRepository = packageRepository;
         this.packageItemRepository = packageItemRepository;
         this.userRepository = userRepository;
         this.truckRepository = truckRepository;
         this.warehouseRepository = warehouseRepository;
+        this.ups = ups;
     }
     
     @Override
@@ -59,7 +63,11 @@ public class ShipmentServiceImpl implements ShipmentService {
         
         try {
             // 1. Find or create warehouse
-            Warehouse warehouse = findOrCreateWarehouse(request.getShipmentInfo().getWarehouseId());
+            Warehouse warehouse = findOrCreateWarehouse(
+                request.getShipmentInfo().getWarehouseId(),
+                request.getShipmentInfo().getDestination().getX(),
+                request.getShipmentInfo().getDestination().getY()
+            );
             
             // 2. Find user if ups_account_name is provided
             User user = null;
@@ -68,6 +76,11 @@ public class ShipmentServiceImpl implements ShipmentService {
                 Optional<User> userOpt = userRepository.findByUsername(
                         request.getShipmentInfo().getUpsAccountName());
                 user = userOpt.orElse(null);
+                
+                if (user == null) {
+                    logger.warn("UPS account name provided but user not found: {}", 
+                            request.getShipmentInfo().getUpsAccountName());
+                }
             }
             
             // 3. Find available truck
@@ -76,16 +89,17 @@ public class ShipmentServiceImpl implements ShipmentService {
             if (truckOpt.isPresent()) {
                 Truck truck = truckOpt.get();
                 
-                // 4. Create package entity
-                Package pkg = new Package();
+                // 4. Create package entity - explicitly use fully qualified name to avoid ambiguity
+                com.ups.model.entity.Package pkg = new com.ups.model.entity.Package();
                 pkg.setId(request.getShipmentInfo().getPackageId());
                 pkg.setWarehouse(warehouse);
                 pkg.setUser(user);
                 pkg.setDestinationX(request.getShipmentInfo().getDestination().getX());
                 pkg.setDestinationY(request.getShipmentInfo().getDestination().getY());
                 pkg.setStatus(PackageStatus.CREATED);
+                pkg.setTruck(truck);
                 
-                // 5. Save package to get ID
+                // 5. Save package
                 packageRepository.save(pkg);
                 
                 // 6. Add items to package
@@ -100,11 +114,16 @@ public class ShipmentServiceImpl implements ShipmentService {
                     }
                 }
                 
-                // 7. Set response
+                // 7. Update truck status and send it to the warehouse
+                truck.setStatus(TruckStatus.TRAVELING);
+                truckRepository.save(truck);
+                
+                // 8. Send truck to pick up package
+                ups.sendTruckToPickup(truck.getId(), warehouse.getId());
+                
+                // 9. Set response
                 response.setStatus("ACCEPTED");
                 response.setTruckId(truck.getId());
-                
-                // 8. TODO: Send truck to pick up package (Member 1's responsibility)
                 
                 logger.info("Shipment request accepted for package ID: {} with truck ID: {}", 
                         pkg.getId(), truck.getId());
@@ -122,13 +141,13 @@ public class ShipmentServiceImpl implements ShipmentService {
         return response;
     }
     
-    private Warehouse findOrCreateWarehouse(Integer warehouseId) {
+    private Warehouse findOrCreateWarehouse(Integer warehouseId, Integer x, Integer y) {
         return warehouseRepository.findById(warehouseId)
                 .orElseGet(() -> {
                     Warehouse newWarehouse = new Warehouse();
                     newWarehouse.setId(warehouseId);
-                    newWarehouse.setX(0); // Default coordinates
-                    newWarehouse.setY(0); // Default coordinates
+                    newWarehouse.setX(x); // Use the provided coordinates
+                    newWarehouse.setY(y);
                     return warehouseRepository.save(newWarehouse);
                 });
     }

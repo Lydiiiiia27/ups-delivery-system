@@ -23,13 +23,19 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())  // Disable CSRF for API endpoints
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers(new AntPathRequestMatcher("/api/**")).permitAll()
+                // Amazon API endpoints - explicitly permit all without authentication
+                .requestMatchers(new AntPathRequestMatcher("/api/createshipment")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/api/changedestination")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/api/queryshipment")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/api/notify/**")).permitAll()
+                // Public endpoints
                 .requestMatchers(new AntPathRequestMatcher("/login")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/register")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/css/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/js/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/tracking/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/h2-console/**")).permitAll()
+                // Everything else needs authentication
                 .anyRequest().authenticated()
             )
             .formLogin(form -> form
