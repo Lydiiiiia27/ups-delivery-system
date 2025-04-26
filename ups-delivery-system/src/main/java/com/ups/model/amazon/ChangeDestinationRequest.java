@@ -1,4 +1,3 @@
-// ChangeDestinationRequest.java
 package com.ups.model.amazon;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -16,8 +15,10 @@ public class ChangeDestinationRequest {
     @JsonProperty("package_id")
     private Long packageId;
     
-    private Destination destination;
+    @JsonProperty("new_destination")
+    private Destination newDestination;
     
+    // Getters and setters
     public String getMessageType() {
         return messageType;
     }
@@ -50,18 +51,19 @@ public class ChangeDestinationRequest {
         this.packageId = packageId;
     }
     
-    public Destination getDestination() {
-        return destination;
+    public Destination getNewDestination() {
+        return newDestination;
     }
     
-    public void setDestination(Destination destination) {
-        this.destination = destination;
+    public void setNewDestination(Destination newDestination) {
+        this.newDestination = newDestination;
     }
     
     public static class Destination {
         private Integer x;
         private Integer y;
         
+        // Getters and setters
         public Integer getX() {
             return x;
         }
@@ -77,65 +79,5 @@ public class ChangeDestinationRequest {
         public void setY(Integer y) {
             this.y = y;
         }
-    }
-}
-
-// ChangeDestinationResponse.java
-package com.ups.model.amazon;
-
-import com.fasterxml.jackson.annotation.JsonProperty;
-import java.time.Instant;
-
-public class ChangeDestinationResponse {
-    @JsonProperty("message_type")
-    private String messageType;
-    
-    @JsonProperty("seq_num")
-    private Long seqNum;
-    
-    private Long ack;
-    
-    private Instant timestamp;
-    
-    private String status;
-    
-    public String getMessageType() {
-        return messageType;
-    }
-    
-    public void setMessageType(String messageType) {
-        this.messageType = messageType;
-    }
-    
-    public Long getSeqNum() {
-        return seqNum;
-    }
-    
-    public void setSeqNum(Long seqNum) {
-        this.seqNum = seqNum;
-    }
-    
-    public Long getAck() {
-        return ack;
-    }
-    
-    public void setAck(Long ack) {
-        this.ack = ack;
-    }
-    
-    public Instant getTimestamp() {
-        return timestamp;
-    }
-    
-    public void setTimestamp(Instant timestamp) {
-        this.timestamp = timestamp;
-    }
-    
-    public String getStatus() {
-        return status;
-    }
-    
-    public void setStatus(String status) {
-        this.status = status;
     }
 }
