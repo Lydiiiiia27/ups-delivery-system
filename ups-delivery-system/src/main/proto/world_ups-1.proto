@@ -1,4 +1,6 @@
 syntax = "proto2";
+package com.ups;
+option java_outer_classname = "WorldUpsProto";
 message UInitTruck{
   required int32 id = 1;
   required int32 x=2;

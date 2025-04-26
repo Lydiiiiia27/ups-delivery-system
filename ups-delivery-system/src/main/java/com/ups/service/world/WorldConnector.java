@@ -8,6 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import com.ups.WorldUpsProto;
+
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,26 +41,26 @@ public class WorldConnector {
 
     private void connect(int worldId, boolean newWorld, List<Truck> trucks) throws IOException {
         // === 1. Create UConnect request ===
-        WorldUps1.UConnect.Builder connectBuilder = WorldUps1.UConnect.newBuilder();
+        WorldUpsProto.UConnect.Builder connectBuilder = WorldUpsProto.UConnect.newBuilder();
         if (!newWorld) {
             connectBuilder.setWorldid(worldId);
         }
         if (trucks != null && trucks.size() > 0) {
-            WorldUps1.UInitTruck.Builder truckBuilder = WorldUps1.UInitTruck.newBuilder();
+            WorldUpsProto.UInitTruck.Builder truckBuilder = WorldUpsProto.UInitTruck.newBuilder();
             for (Truck truck : trucks) {
                 truckBuilder.setId(truck.getId());
                 truckBuilder.setX(truck.getX());
                 truckBuilder.setY(truck.getY());
-                WorldUps1.UInitTruck truckRequest = truckBuilder.build();
+                WorldUpsProto.UInitTruck truckRequest = truckBuilder.build();
                 connectBuilder.addTrucks(truckRequest);
             }
         }
         connectBuilder.setIsAmazon(false); // false means UPS
-        WorldUps1.UConnect connectRequest = connectBuilder.build();
+        WorldUpsProto.UConnect connectRequest = connectBuilder.build();
         sendMessage(connectRequest);
 
         // === 2. Receive UConnected response ===
-        WorldUps1.UConnected connectedResponse = receiveMessage(WorldUps1.UConnected.parser());
+        WorldUpsProto.UConnected connectedResponse = receiveMessage(WorldUpsProto.UConnected.parser());
         String connectionResult = connectedResponse.getResult();
         if (connectionResult.equals("connected!")) {
             logger.info("Successfully connected to world simulator: {}", connectionResult);
@@ -80,75 +82,75 @@ public class WorldConnector {
 
     public void deliver(int truckId, long packageId, Location location, long seqNum) throws IOException {
         // === 1. Create UGoDeliver request ===
-        WorldUps1.UGoDeliver.Builder deliverBuilder = WorldUps1.UGoDeliver.newBuilder();
+        WorldUpsProto.UGoDeliver.Builder deliverBuilder = WorldUpsProto.UGoDeliver.newBuilder();
         deliverBuilder.setTruckid(truckId);
-        WorldUps1.UDeliveryLocation.Builder deliveryLocationBuilder = WorldUps1.UDeliveryLocation.newBuilder();
+        WorldUpsProto.UDeliveryLocation.Builder deliveryLocationBuilder = WorldUpsProto.UDeliveryLocation.newBuilder();
         deliveryLocationBuilder.setPackageid(packageId);
         deliveryLocationBuilder.setX(location.getX());
         deliveryLocationBuilder.setY(location.getY());
-        WorldUps1.UDeliveryLocation deliveryLocation = deliveryLocationBuilder.build();
+        WorldUpsProto.UDeliveryLocation deliveryLocation = deliveryLocationBuilder.build();
         deliverBuilder.addPackages(deliveryLocation);
         deliverBuilder.setSeqnum(seqNum);
-        WorldUps1.UGoDeliver deliverRequest = deliverBuilder.build();
+        WorldUpsProto.UGoDeliver deliverRequest = deliverBuilder.build();
 
         // === 2. Create UCommands request ===
-        WorldUps1.UCommands.Builder commandsBuilder = WorldUps1.UCommands.newBuilder();
+        WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
         commandsBuilder.addDeliveries(deliverRequest);
-        WorldUps1.UCommands commandsRequest = commandsBuilder.build();
+        WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
 
-        WorldUps1.UResponses responses = sendAndReceive(commandsRequest);
+        WorldUpsProto.UResponses responses = sendAndReceive(commandsRequest);
         processResponse(responses);
     }
 
     public void pickup(int truckId, int warehouseId, long seqNum) throws IOException {
         // === 1. Create UGoPickup request ===
-        WorldUps1.UGoPickup.Builder pickupBuilder = WorldUps1.UGoPickup.newBuilder();
+        WorldUpsProto.UGoPickup.Builder pickupBuilder = WorldUpsProto.UGoPickup.newBuilder();
         pickupBuilder.setTruckid(truckId);
         pickupBuilder.setWhid(warehouseId);
         pickupBuilder.setSeqnum(seqNum);
-        WorldUps1.UGoPickup pickupRequest = pickupBuilder.build();
+        WorldUpsProto.UGoPickup pickupRequest = pickupBuilder.build();
 
         // === 2. Create UCommands request ===
-        WorldUps1.UCommands.Builder commandsBuilder = WorldUps1.UCommands.newBuilder();
+        WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
         commandsBuilder.addPickups(pickupRequest);
-        WorldUps1.UCommands commandsRequest = commandsBuilder.build();
+        WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
 
-        WorldUps1.UResponses responses = sendAndReceive(commandsRequest);
+        WorldUpsProto.UResponses responses = sendAndReceive(commandsRequest);
         processResponse(responses);
     }
     
     public void query(int truckId, long seqNum) throws IOException {
         // === 1. Create UQuery request ===
-        WorldUps1.UQuery.Builder queryBuilder = WorldUps1.UQuery.newBuilder();
+        WorldUpsProto.UQuery.Builder queryBuilder = WorldUpsProto.UQuery.newBuilder();
         queryBuilder.setTruckid(truckId);
         queryBuilder.setSeqnum(seqNum);
-        WorldUps1.UQuery queryRequest = queryBuilder.build();
+        WorldUpsProto.UQuery queryRequest = queryBuilder.build();
 
         // === 2. Create UCommands request ===
-        WorldUps1.UCommands.Builder commandsBuilder = WorldUps1.UCommands.newBuilder();
+        WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
         commandsBuilder.addQueries(queryRequest);
-        WorldUps1.UCommands commandsRequest = commandsBuilder.build();
+        WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
 
-        WorldUps1.UResponses responses = sendAndReceive(commandsRequest);
+        WorldUpsProto.UResponses responses = sendAndReceive(commandsRequest);
         processResponse(responses);
     }
 
     public void setSimulationSpeed(int speed) throws IOException {
-        WorldUps1.UCommands.Builder commandsBuilder = WorldUps1.UCommands.newBuilder();
+        WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
         commandsBuilder.setSimspeed(speed);
-        WorldUps1.UCommands commandsRequest = commandsBuilder.build();
+        WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
         
-        WorldUps1.UResponses responses = sendAndReceive(commandsRequest);
+        WorldUpsProto.UResponses responses = sendAndReceive(commandsRequest);
         processResponse(responses);
         logger.info("Simulation speed set to: {}", speed);
     }
     
     public void disconnect() throws IOException {
-        WorldUps1.UCommands.Builder commandsBuilder = WorldUps1.UCommands.newBuilder();
+        WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
         commandsBuilder.setDisconnect(true);
-        WorldUps1.UCommands commandsRequest = commandsBuilder.build();
+        WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
         
-        WorldUps1.UResponses responses = sendAndReceive(commandsRequest);
+        WorldUpsProto.UResponses responses = sendAndReceive(commandsRequest);
         processResponse(responses);
         
         if (responses.hasFinished() && responses.getFinished()) {
@@ -159,9 +161,9 @@ public class WorldConnector {
         }
     }
 
-    private WorldUps1.UResponses sendAndReceive(WorldUps1.UCommands commandsRequest) throws IOException {
+    private WorldUpsProto.UResponses sendAndReceive(WorldUpsProto.UCommands commandsRequest) throws IOException {
         sendMessage(commandsRequest);
-        WorldUps1.UResponses response = receiveMessage(WorldUps1.UResponses.parser());
+        WorldUpsProto.UResponses response = receiveMessage(WorldUpsProto.UResponses.parser());
         
         // Process acknowledgments
         if (response.getAcksCount() > 0) {
@@ -171,26 +173,26 @@ public class WorldConnector {
         return response;
     }
 
-    private void processResponse(WorldUps1.UResponses response) {
+    private void processResponse(WorldUpsProto.UResponses response) {
         // Process completions
-        for (WorldUps1.UFinished completion : response.getCompletionsList()) {
+        for (WorldUpsProto.UFinished completion : response.getCompletionsList()) {
             logger.info("Truck {} completed job at ({},{}) with status: {}", 
                     completion.getTruckid(), completion.getX(), completion.getY(), completion.getStatus());
         }
         
         // Process deliveries
-        for (WorldUps1.UDeliveryMade delivery : response.getDeliveredList()) {
+        for (WorldUpsProto.UDeliveryMade delivery : response.getDeliveredList()) {
             logger.info("Truck {} delivered package {}", delivery.getTruckid(), delivery.getPackageid());
         }
         
         // Process truck status updates
-        for (WorldUps1.UTruck truck : response.getTruckstatusList()) {
+        for (WorldUpsProto.UTruck truck : response.getTruckstatusList()) {
             logger.info("Truck {} status: {} at location ({},{})", 
                     truck.getTruckid(), truck.getStatus(), truck.getX(), truck.getY());
         }
         
         // Process errors
-        for (WorldUps1.UErr error : response.getErrorList()) {
+        for (WorldUpsProto.UErr error : response.getErrorList()) {
             logger.error("Error for sequence {}: {}", error.getOriginseqnum(), error.getErr());
         }
         

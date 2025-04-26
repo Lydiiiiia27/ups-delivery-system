@@ -8,4 +8,5 @@ import java.util.List;
 
 public interface TruckRepository extends JpaRepository<Truck, Integer> {
     List<Truck> findByStatus(TruckStatus status);
+    List<Truck> findByStatusNot(TruckStatus status);
 }
