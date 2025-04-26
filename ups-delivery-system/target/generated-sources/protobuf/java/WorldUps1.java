@@ -91,7 +91,7 @@ public final class WorldUps1 {
 
     private int bitField0_;
     public static final int ID_FIELD_NUMBER = 1;
-    private int id_ = 0;
+    private int id_;
     /**
      * <code>required int32 id = 1;</code>
      * @return Whether the id field is set.
@@ -110,7 +110,7 @@ public final class WorldUps1 {
     }
 
     public static final int X_FIELD_NUMBER = 2;
-    private int x_ = 0;
+    private int x_;
     /**
      * <code>required int32 x = 2;</code>
      * @return Whether the x field is set.
@@ -129,7 +129,7 @@ public final class WorldUps1 {
     }
 
     public static final int Y_FIELD_NUMBER = 3;
-    private int y_ = 0;
+    private int y_;
     /**
      * <code>required int32 y = 3;</code>
      * @return Whether the y field is set.
@@ -384,10 +384,12 @@ public final class WorldUps1 {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        bitField0_ = 0;
         id_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000001);
         x_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000002);
         y_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000004);
         return this;
       }
 
@@ -414,12 +416,6 @@ public final class WorldUps1 {
       @java.lang.Override
       public WorldUps1.UInitTruck buildPartial() {
         WorldUps1.UInitTruck result = new WorldUps1.UInitTruck(this);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartial0(WorldUps1.UInitTruck result) {
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -434,7 +430,9 @@ public final class WorldUps1 {
           result.y_ = y_;
           to_bitField0_ |= 0x00000004;
         }
-        result.bitField0_ |= to_bitField0_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
       }
 
       @java.lang.Override
@@ -580,9 +578,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setId(int value) {
-        
-        id_ = value;
         bitField0_ |= 0x00000001;
+        id_ = value;
         onChanged();
         return this;
       }
@@ -620,9 +617,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setX(int value) {
-        
-        x_ = value;
         bitField0_ |= 0x00000002;
+        x_ = value;
         onChanged();
         return this;
       }
@@ -660,9 +656,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setY(int value) {
-        
-        y_ = value;
         bitField0_ |= 0x00000004;
+        y_ = value;
         onChanged();
         return this;
       }
@@ -833,7 +828,7 @@ public final class WorldUps1 {
 
     private int bitField0_;
     public static final int WORLDID_FIELD_NUMBER = 1;
-    private long worldid_ = 0L;
+    private long worldid_;
     /**
      * <code>optional int64 worldid = 1;</code>
      * @return Whether the worldid field is set.
@@ -852,7 +847,6 @@ public final class WorldUps1 {
     }
 
     public static final int TRUCKS_FIELD_NUMBER = 2;
-    @SuppressWarnings("serial")
     private java.util.List<WorldUps1.UInitTruck> trucks_;
     /**
      * <code>repeated .UInitTruck trucks = 2;</code>
@@ -893,7 +887,7 @@ public final class WorldUps1 {
     }
 
     public static final int ISAMAZON_FIELD_NUMBER = 3;
-    private boolean isAmazon_ = false;
+    private boolean isAmazon_;
     /**
      * <code>required bool isAmazon = 3;</code>
      * @return Whether the isAmazon field is set.
@@ -1145,8 +1139,8 @@ public final class WorldUps1 {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        bitField0_ = 0;
         worldid_ = 0L;
+        bitField0_ = (bitField0_ & ~0x00000001);
         if (trucksBuilder_ == null) {
           trucks_ = java.util.Collections.emptyList();
         } else {
@@ -1155,6 +1149,7 @@ public final class WorldUps1 {
         }
         bitField0_ = (bitField0_ & ~0x00000002);
         isAmazon_ = false;
+        bitField0_ = (bitField0_ & ~0x00000004);
         return this;
       }
 
@@ -1181,13 +1176,12 @@ public final class WorldUps1 {
       @java.lang.Override
       public WorldUps1.UConnect buildPartial() {
         WorldUps1.UConnect result = new WorldUps1.UConnect(this);
-        buildPartialRepeatedFields(result);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartialRepeatedFields(WorldUps1.UConnect result) {
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
+        if (((from_bitField0_ & 0x00000001) != 0)) {
+          result.worldid_ = worldid_;
+          to_bitField0_ |= 0x00000001;
+        }
         if (trucksBuilder_ == null) {
           if (((bitField0_ & 0x00000002) != 0)) {
             trucks_ = java.util.Collections.unmodifiableList(trucks_);
@@ -1197,20 +1191,13 @@ public final class WorldUps1 {
         } else {
           result.trucks_ = trucksBuilder_.build();
         }
-      }
-
-      private void buildPartial0(WorldUps1.UConnect result) {
-        int from_bitField0_ = bitField0_;
-        int to_bitField0_ = 0;
-        if (((from_bitField0_ & 0x00000001) != 0)) {
-          result.worldid_ = worldid_;
-          to_bitField0_ |= 0x00000001;
-        }
         if (((from_bitField0_ & 0x00000004) != 0)) {
           result.isAmazon_ = isAmazon_;
           to_bitField0_ |= 0x00000002;
         }
-        result.bitField0_ |= to_bitField0_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
       }
 
       @java.lang.Override
@@ -1386,9 +1373,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setWorldid(long value) {
-        
-        worldid_ = value;
         bitField0_ |= 0x00000001;
+        worldid_ = value;
         onChanged();
         return this;
       }
@@ -1666,9 +1652,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setIsAmazon(boolean value) {
-        
-        isAmazon_ = value;
         bitField0_ |= 0x00000004;
+        isAmazon_ = value;
         onChanged();
         return this;
       }
@@ -1821,7 +1806,7 @@ public final class WorldUps1 {
 
     private int bitField0_;
     public static final int WORLDID_FIELD_NUMBER = 1;
-    private long worldid_ = 0L;
+    private long worldid_;
     /**
      * <code>required int64 worldid = 1;</code>
      * @return Whether the worldid field is set.
@@ -1840,8 +1825,7 @@ public final class WorldUps1 {
     }
 
     public static final int RESULT_FIELD_NUMBER = 2;
-    @SuppressWarnings("serial")
-    private volatile java.lang.Object result_ = "";
+    private volatile java.lang.Object result_;
     /**
      * <code>required string result = 2;</code>
      * @return Whether the result field is set.
@@ -2105,9 +2089,10 @@ public final class WorldUps1 {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        bitField0_ = 0;
         worldid_ = 0L;
+        bitField0_ = (bitField0_ & ~0x00000001);
         result_ = "";
+        bitField0_ = (bitField0_ & ~0x00000002);
         return this;
       }
 
@@ -2134,12 +2119,6 @@ public final class WorldUps1 {
       @java.lang.Override
       public WorldUps1.UConnected buildPartial() {
         WorldUps1.UConnected result = new WorldUps1.UConnected(this);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartial0(WorldUps1.UConnected result) {
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -2147,10 +2126,12 @@ public final class WorldUps1 {
           to_bitField0_ |= 0x00000001;
         }
         if (((from_bitField0_ & 0x00000002) != 0)) {
-          result.result_ = result_;
           to_bitField0_ |= 0x00000002;
         }
-        result.bitField0_ |= to_bitField0_;
+        result.result_ = result_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
       }
 
       @java.lang.Override
@@ -2201,8 +2182,8 @@ public final class WorldUps1 {
           setWorldid(other.getWorldid());
         }
         if (other.hasResult()) {
-          result_ = other.result_;
           bitField0_ |= 0x00000002;
+          result_ = other.result_;
           onChanged();
         }
         this.mergeUnknownFields(other.getUnknownFields());
@@ -2287,9 +2268,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setWorldid(long value) {
-        
-        worldid_ = value;
         bitField0_ |= 0x00000001;
+        worldid_ = value;
         onChanged();
         return this;
       }
@@ -2354,9 +2334,11 @@ public final class WorldUps1 {
        */
       public Builder setResult(
           java.lang.String value) {
-        if (value == null) { throw new NullPointerException(); }
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  bitField0_ |= 0x00000002;
         result_ = value;
-        bitField0_ |= 0x00000002;
         onChanged();
         return this;
       }
@@ -2365,8 +2347,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder clearResult() {
-        result_ = getDefaultInstance().getResult();
         bitField0_ = (bitField0_ & ~0x00000002);
+        result_ = getDefaultInstance().getResult();
         onChanged();
         return this;
       }
@@ -2377,9 +2359,11 @@ public final class WorldUps1 {
        */
       public Builder setResultBytes(
           com.google.protobuf.ByteString value) {
-        if (value == null) { throw new NullPointerException(); }
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  bitField0_ |= 0x00000002;
         result_ = value;
-        bitField0_ |= 0x00000002;
         onChanged();
         return this;
       }
@@ -2526,7 +2510,7 @@ public final class WorldUps1 {
 
     private int bitField0_;
     public static final int TRUCKID_FIELD_NUMBER = 1;
-    private int truckid_ = 0;
+    private int truckid_;
     /**
      * <code>required int32 truckid = 1;</code>
      * @return Whether the truckid field is set.
@@ -2545,7 +2529,7 @@ public final class WorldUps1 {
     }
 
     public static final int WHID_FIELD_NUMBER = 2;
-    private int whid_ = 0;
+    private int whid_;
     /**
      * <code>required int32 whid = 2;</code>
      * @return Whether the whid field is set.
@@ -2564,7 +2548,7 @@ public final class WorldUps1 {
     }
 
     public static final int SEQNUM_FIELD_NUMBER = 3;
-    private long seqnum_ = 0L;
+    private long seqnum_;
     /**
      * <code>required int64 seqnum = 3;</code>
      * @return Whether the seqnum field is set.
@@ -2820,10 +2804,12 @@ public final class WorldUps1 {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        bitField0_ = 0;
         truckid_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000001);
         whid_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000002);
         seqnum_ = 0L;
+        bitField0_ = (bitField0_ & ~0x00000004);
         return this;
       }
 
@@ -2850,12 +2836,6 @@ public final class WorldUps1 {
       @java.lang.Override
       public WorldUps1.UGoPickup buildPartial() {
         WorldUps1.UGoPickup result = new WorldUps1.UGoPickup(this);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartial0(WorldUps1.UGoPickup result) {
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -2870,7 +2850,9 @@ public final class WorldUps1 {
           result.seqnum_ = seqnum_;
           to_bitField0_ |= 0x00000004;
         }
-        result.bitField0_ |= to_bitField0_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
       }
 
       @java.lang.Override
@@ -3016,9 +2998,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setTruckid(int value) {
-        
-        truckid_ = value;
         bitField0_ |= 0x00000001;
+        truckid_ = value;
         onChanged();
         return this;
       }
@@ -3056,9 +3037,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setWhid(int value) {
-        
-        whid_ = value;
         bitField0_ |= 0x00000002;
+        whid_ = value;
         onChanged();
         return this;
       }
@@ -3096,9 +3076,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setSeqnum(long value) {
-        
-        seqnum_ = value;
         bitField0_ |= 0x00000004;
+        seqnum_ = value;
         onChanged();
         return this;
       }
@@ -3284,7 +3263,7 @@ public final class WorldUps1 {
 
     private int bitField0_;
     public static final int TRUCKID_FIELD_NUMBER = 1;
-    private int truckid_ = 0;
+    private int truckid_;
     /**
      * <code>required int32 truckid = 1;</code>
      * @return Whether the truckid field is set.
@@ -3303,7 +3282,7 @@ public final class WorldUps1 {
     }
 
     public static final int X_FIELD_NUMBER = 2;
-    private int x_ = 0;
+    private int x_;
     /**
      * <code>required int32 x = 2;</code>
      * @return Whether the x field is set.
@@ -3322,7 +3301,7 @@ public final class WorldUps1 {
     }
 
     public static final int Y_FIELD_NUMBER = 3;
-    private int y_ = 0;
+    private int y_;
     /**
      * <code>required int32 y = 3;</code>
      * @return Whether the y field is set.
@@ -3341,8 +3320,7 @@ public final class WorldUps1 {
     }
 
     public static final int STATUS_FIELD_NUMBER = 4;
-    @SuppressWarnings("serial")
-    private volatile java.lang.Object status_ = "";
+    private volatile java.lang.Object status_;
     /**
      * <code>required string status = 4;</code>
      * @return Whether the status field is set.
@@ -3390,7 +3368,7 @@ public final class WorldUps1 {
     }
 
     public static final int SEQNUM_FIELD_NUMBER = 5;
-    private long seqnum_ = 0L;
+    private long seqnum_;
     /**
      * <code>required int64 seqnum = 5;</code>
      * @return Whether the seqnum field is set.
@@ -3685,12 +3663,16 @@ public final class WorldUps1 {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        bitField0_ = 0;
         truckid_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000001);
         x_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000002);
         y_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000004);
         status_ = "";
+        bitField0_ = (bitField0_ & ~0x00000008);
         seqnum_ = 0L;
+        bitField0_ = (bitField0_ & ~0x00000010);
         return this;
       }
 
@@ -3717,12 +3699,6 @@ public final class WorldUps1 {
       @java.lang.Override
       public WorldUps1.UFinished buildPartial() {
         WorldUps1.UFinished result = new WorldUps1.UFinished(this);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartial0(WorldUps1.UFinished result) {
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -3738,14 +3714,16 @@ public final class WorldUps1 {
           to_bitField0_ |= 0x00000004;
         }
         if (((from_bitField0_ & 0x00000008) != 0)) {
-          result.status_ = status_;
           to_bitField0_ |= 0x00000008;
         }
+        result.status_ = status_;
         if (((from_bitField0_ & 0x00000010) != 0)) {
           result.seqnum_ = seqnum_;
           to_bitField0_ |= 0x00000010;
         }
-        result.bitField0_ |= to_bitField0_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
       }
 
       @java.lang.Override
@@ -3802,8 +3780,8 @@ public final class WorldUps1 {
           setY(other.getY());
         }
         if (other.hasStatus()) {
-          status_ = other.status_;
           bitField0_ |= 0x00000008;
+          status_ = other.status_;
           onChanged();
         }
         if (other.hasSeqnum()) {
@@ -3915,9 +3893,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setTruckid(int value) {
-        
-        truckid_ = value;
         bitField0_ |= 0x00000001;
+        truckid_ = value;
         onChanged();
         return this;
       }
@@ -3955,9 +3932,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setX(int value) {
-        
-        x_ = value;
         bitField0_ |= 0x00000002;
+        x_ = value;
         onChanged();
         return this;
       }
@@ -3995,9 +3971,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setY(int value) {
-        
-        y_ = value;
         bitField0_ |= 0x00000004;
+        y_ = value;
         onChanged();
         return this;
       }
@@ -4062,9 +4037,11 @@ public final class WorldUps1 {
        */
       public Builder setStatus(
           java.lang.String value) {
-        if (value == null) { throw new NullPointerException(); }
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  bitField0_ |= 0x00000008;
         status_ = value;
-        bitField0_ |= 0x00000008;
         onChanged();
         return this;
       }
@@ -4073,8 +4050,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder clearStatus() {
-        status_ = getDefaultInstance().getStatus();
         bitField0_ = (bitField0_ & ~0x00000008);
+        status_ = getDefaultInstance().getStatus();
         onChanged();
         return this;
       }
@@ -4085,9 +4062,11 @@ public final class WorldUps1 {
        */
       public Builder setStatusBytes(
           com.google.protobuf.ByteString value) {
-        if (value == null) { throw new NullPointerException(); }
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  bitField0_ |= 0x00000008;
         status_ = value;
-        bitField0_ |= 0x00000008;
         onChanged();
         return this;
       }
@@ -4115,9 +4094,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setSeqnum(long value) {
-        
-        seqnum_ = value;
         bitField0_ |= 0x00000010;
+        seqnum_ = value;
         onChanged();
         return this;
       }
@@ -4274,7 +4252,7 @@ public final class WorldUps1 {
 
     private int bitField0_;
     public static final int TRUCKID_FIELD_NUMBER = 1;
-    private int truckid_ = 0;
+    private int truckid_;
     /**
      * <code>required int32 truckid = 1;</code>
      * @return Whether the truckid field is set.
@@ -4293,7 +4271,7 @@ public final class WorldUps1 {
     }
 
     public static final int PACKAGEID_FIELD_NUMBER = 2;
-    private long packageid_ = 0L;
+    private long packageid_;
     /**
      * <code>required int64 packageid = 2;</code>
      * @return Whether the packageid field is set.
@@ -4312,7 +4290,7 @@ public final class WorldUps1 {
     }
 
     public static final int SEQNUM_FIELD_NUMBER = 3;
-    private long seqnum_ = 0L;
+    private long seqnum_;
     /**
      * <code>required int64 seqnum = 3;</code>
      * @return Whether the seqnum field is set.
@@ -4569,10 +4547,12 @@ public final class WorldUps1 {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        bitField0_ = 0;
         truckid_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000001);
         packageid_ = 0L;
+        bitField0_ = (bitField0_ & ~0x00000002);
         seqnum_ = 0L;
+        bitField0_ = (bitField0_ & ~0x00000004);
         return this;
       }
 
@@ -4599,12 +4579,6 @@ public final class WorldUps1 {
       @java.lang.Override
       public WorldUps1.UDeliveryMade buildPartial() {
         WorldUps1.UDeliveryMade result = new WorldUps1.UDeliveryMade(this);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartial0(WorldUps1.UDeliveryMade result) {
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -4619,7 +4593,9 @@ public final class WorldUps1 {
           result.seqnum_ = seqnum_;
           to_bitField0_ |= 0x00000004;
         }
-        result.bitField0_ |= to_bitField0_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
       }
 
       @java.lang.Override
@@ -4765,9 +4741,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setTruckid(int value) {
-        
-        truckid_ = value;
         bitField0_ |= 0x00000001;
+        truckid_ = value;
         onChanged();
         return this;
       }
@@ -4805,9 +4780,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setPackageid(long value) {
-        
-        packageid_ = value;
         bitField0_ |= 0x00000002;
+        packageid_ = value;
         onChanged();
         return this;
       }
@@ -4845,9 +4819,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setSeqnum(long value) {
-        
-        seqnum_ = value;
         bitField0_ |= 0x00000004;
+        seqnum_ = value;
         onChanged();
         return this;
       }
@@ -5004,7 +4977,7 @@ public final class WorldUps1 {
 
     private int bitField0_;
     public static final int PACKAGEID_FIELD_NUMBER = 1;
-    private long packageid_ = 0L;
+    private long packageid_;
     /**
      * <code>required int64 packageid = 1;</code>
      * @return Whether the packageid field is set.
@@ -5023,7 +4996,7 @@ public final class WorldUps1 {
     }
 
     public static final int X_FIELD_NUMBER = 2;
-    private int x_ = 0;
+    private int x_;
     /**
      * <code>required int32 x = 2;</code>
      * @return Whether the x field is set.
@@ -5042,7 +5015,7 @@ public final class WorldUps1 {
     }
 
     public static final int Y_FIELD_NUMBER = 3;
-    private int y_ = 0;
+    private int y_;
     /**
      * <code>required int32 y = 3;</code>
      * @return Whether the y field is set.
@@ -5298,10 +5271,12 @@ public final class WorldUps1 {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        bitField0_ = 0;
         packageid_ = 0L;
+        bitField0_ = (bitField0_ & ~0x00000001);
         x_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000002);
         y_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000004);
         return this;
       }
 
@@ -5328,12 +5303,6 @@ public final class WorldUps1 {
       @java.lang.Override
       public WorldUps1.UDeliveryLocation buildPartial() {
         WorldUps1.UDeliveryLocation result = new WorldUps1.UDeliveryLocation(this);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartial0(WorldUps1.UDeliveryLocation result) {
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -5348,7 +5317,9 @@ public final class WorldUps1 {
           result.y_ = y_;
           to_bitField0_ |= 0x00000004;
         }
-        result.bitField0_ |= to_bitField0_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
       }
 
       @java.lang.Override
@@ -5494,9 +5465,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setPackageid(long value) {
-        
-        packageid_ = value;
         bitField0_ |= 0x00000001;
+        packageid_ = value;
         onChanged();
         return this;
       }
@@ -5534,9 +5504,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setX(int value) {
-        
-        x_ = value;
         bitField0_ |= 0x00000002;
+        x_ = value;
         onChanged();
         return this;
       }
@@ -5574,9 +5543,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setY(int value) {
-        
-        y_ = value;
         bitField0_ |= 0x00000004;
+        y_ = value;
         onChanged();
         return this;
       }
@@ -5747,7 +5715,7 @@ public final class WorldUps1 {
 
     private int bitField0_;
     public static final int TRUCKID_FIELD_NUMBER = 1;
-    private int truckid_ = 0;
+    private int truckid_;
     /**
      * <code>required int32 truckid = 1;</code>
      * @return Whether the truckid field is set.
@@ -5766,7 +5734,6 @@ public final class WorldUps1 {
     }
 
     public static final int PACKAGES_FIELD_NUMBER = 2;
-    @SuppressWarnings("serial")
     private java.util.List<WorldUps1.UDeliveryLocation> packages_;
     /**
      * <code>repeated .UDeliveryLocation packages = 2;</code>
@@ -5807,7 +5774,7 @@ public final class WorldUps1 {
     }
 
     public static final int SEQNUM_FIELD_NUMBER = 3;
-    private long seqnum_ = 0L;
+    private long seqnum_;
     /**
      * <code>required int64 seqnum = 3;</code>
      * @return Whether the seqnum field is set.
@@ -6062,8 +6029,8 @@ public final class WorldUps1 {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        bitField0_ = 0;
         truckid_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000001);
         if (packagesBuilder_ == null) {
           packages_ = java.util.Collections.emptyList();
         } else {
@@ -6072,6 +6039,7 @@ public final class WorldUps1 {
         }
         bitField0_ = (bitField0_ & ~0x00000002);
         seqnum_ = 0L;
+        bitField0_ = (bitField0_ & ~0x00000004);
         return this;
       }
 
@@ -6098,13 +6066,12 @@ public final class WorldUps1 {
       @java.lang.Override
       public WorldUps1.UGoDeliver buildPartial() {
         WorldUps1.UGoDeliver result = new WorldUps1.UGoDeliver(this);
-        buildPartialRepeatedFields(result);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartialRepeatedFields(WorldUps1.UGoDeliver result) {
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
+        if (((from_bitField0_ & 0x00000001) != 0)) {
+          result.truckid_ = truckid_;
+          to_bitField0_ |= 0x00000001;
+        }
         if (packagesBuilder_ == null) {
           if (((bitField0_ & 0x00000002) != 0)) {
             packages_ = java.util.Collections.unmodifiableList(packages_);
@@ -6114,20 +6081,13 @@ public final class WorldUps1 {
         } else {
           result.packages_ = packagesBuilder_.build();
         }
-      }
-
-      private void buildPartial0(WorldUps1.UGoDeliver result) {
-        int from_bitField0_ = bitField0_;
-        int to_bitField0_ = 0;
-        if (((from_bitField0_ & 0x00000001) != 0)) {
-          result.truckid_ = truckid_;
-          to_bitField0_ |= 0x00000001;
-        }
         if (((from_bitField0_ & 0x00000004) != 0)) {
           result.seqnum_ = seqnum_;
           to_bitField0_ |= 0x00000002;
         }
-        result.bitField0_ |= to_bitField0_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
       }
 
       @java.lang.Override
@@ -6306,9 +6266,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setTruckid(int value) {
-        
-        truckid_ = value;
         bitField0_ |= 0x00000001;
+        truckid_ = value;
         onChanged();
         return this;
       }
@@ -6586,9 +6545,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setSeqnum(long value) {
-        
-        seqnum_ = value;
         bitField0_ |= 0x00000004;
+        seqnum_ = value;
         onChanged();
         return this;
       }
@@ -6752,8 +6710,7 @@ public final class WorldUps1 {
 
     private int bitField0_;
     public static final int ERR_FIELD_NUMBER = 1;
-    @SuppressWarnings("serial")
-    private volatile java.lang.Object err_ = "";
+    private volatile java.lang.Object err_;
     /**
      * <code>required string err = 1;</code>
      * @return Whether the err field is set.
@@ -6801,7 +6758,7 @@ public final class WorldUps1 {
     }
 
     public static final int ORIGINSEQNUM_FIELD_NUMBER = 2;
-    private long originseqnum_ = 0L;
+    private long originseqnum_;
     /**
      * <code>required int64 originseqnum = 2;</code>
      * @return Whether the originseqnum field is set.
@@ -6820,7 +6777,7 @@ public final class WorldUps1 {
     }
 
     public static final int SEQNUM_FIELD_NUMBER = 3;
-    private long seqnum_ = 0L;
+    private long seqnum_;
     /**
      * <code>required int64 seqnum = 3;</code>
      * @return Whether the seqnum field is set.
@@ -7076,10 +7033,12 @@ public final class WorldUps1 {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        bitField0_ = 0;
         err_ = "";
+        bitField0_ = (bitField0_ & ~0x00000001);
         originseqnum_ = 0L;
+        bitField0_ = (bitField0_ & ~0x00000002);
         seqnum_ = 0L;
+        bitField0_ = (bitField0_ & ~0x00000004);
         return this;
       }
 
@@ -7106,18 +7065,12 @@ public final class WorldUps1 {
       @java.lang.Override
       public WorldUps1.UErr buildPartial() {
         WorldUps1.UErr result = new WorldUps1.UErr(this);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartial0(WorldUps1.UErr result) {
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
-          result.err_ = err_;
           to_bitField0_ |= 0x00000001;
         }
+        result.err_ = err_;
         if (((from_bitField0_ & 0x00000002) != 0)) {
           result.originseqnum_ = originseqnum_;
           to_bitField0_ |= 0x00000002;
@@ -7126,7 +7079,9 @@ public final class WorldUps1 {
           result.seqnum_ = seqnum_;
           to_bitField0_ |= 0x00000004;
         }
-        result.bitField0_ |= to_bitField0_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
       }
 
       @java.lang.Override
@@ -7174,8 +7129,8 @@ public final class WorldUps1 {
       public Builder mergeFrom(WorldUps1.UErr other) {
         if (other == WorldUps1.UErr.getDefaultInstance()) return this;
         if (other.hasErr()) {
-          err_ = other.err_;
           bitField0_ |= 0x00000001;
+          err_ = other.err_;
           onChanged();
         }
         if (other.hasOriginseqnum()) {
@@ -7301,9 +7256,11 @@ public final class WorldUps1 {
        */
       public Builder setErr(
           java.lang.String value) {
-        if (value == null) { throw new NullPointerException(); }
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  bitField0_ |= 0x00000001;
         err_ = value;
-        bitField0_ |= 0x00000001;
         onChanged();
         return this;
       }
@@ -7312,8 +7269,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder clearErr() {
-        err_ = getDefaultInstance().getErr();
         bitField0_ = (bitField0_ & ~0x00000001);
+        err_ = getDefaultInstance().getErr();
         onChanged();
         return this;
       }
@@ -7324,9 +7281,11 @@ public final class WorldUps1 {
        */
       public Builder setErrBytes(
           com.google.protobuf.ByteString value) {
-        if (value == null) { throw new NullPointerException(); }
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  bitField0_ |= 0x00000001;
         err_ = value;
-        bitField0_ |= 0x00000001;
         onChanged();
         return this;
       }
@@ -7354,9 +7313,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setOriginseqnum(long value) {
-        
-        originseqnum_ = value;
         bitField0_ |= 0x00000002;
+        originseqnum_ = value;
         onChanged();
         return this;
       }
@@ -7394,9 +7352,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setSeqnum(long value) {
-        
-        seqnum_ = value;
         bitField0_ |= 0x00000004;
+        seqnum_ = value;
         onChanged();
         return this;
       }
@@ -7542,7 +7499,7 @@ public final class WorldUps1 {
 
     private int bitField0_;
     public static final int TRUCKID_FIELD_NUMBER = 1;
-    private int truckid_ = 0;
+    private int truckid_;
     /**
      * <code>required int32 truckid = 1;</code>
      * @return Whether the truckid field is set.
@@ -7561,7 +7518,7 @@ public final class WorldUps1 {
     }
 
     public static final int SEQNUM_FIELD_NUMBER = 2;
-    private long seqnum_ = 0L;
+    private long seqnum_;
     /**
      * <code>required int64 seqnum = 2;</code>
      * @return Whether the seqnum field is set.
@@ -7797,9 +7754,10 @@ public final class WorldUps1 {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        bitField0_ = 0;
         truckid_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000001);
         seqnum_ = 0L;
+        bitField0_ = (bitField0_ & ~0x00000002);
         return this;
       }
 
@@ -7826,12 +7784,6 @@ public final class WorldUps1 {
       @java.lang.Override
       public WorldUps1.UQuery buildPartial() {
         WorldUps1.UQuery result = new WorldUps1.UQuery(this);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartial0(WorldUps1.UQuery result) {
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -7842,7 +7794,9 @@ public final class WorldUps1 {
           result.seqnum_ = seqnum_;
           to_bitField0_ |= 0x00000002;
         }
-        result.bitField0_ |= to_bitField0_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
       }
 
       @java.lang.Override
@@ -7977,9 +7931,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setTruckid(int value) {
-        
-        truckid_ = value;
         bitField0_ |= 0x00000001;
+        truckid_ = value;
         onChanged();
         return this;
       }
@@ -8017,9 +7970,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setSeqnum(long value) {
-        
-        seqnum_ = value;
         bitField0_ |= 0x00000002;
+        seqnum_ = value;
         onChanged();
         return this;
       }
@@ -8205,7 +8157,7 @@ public final class WorldUps1 {
 
     private int bitField0_;
     public static final int TRUCKID_FIELD_NUMBER = 1;
-    private int truckid_ = 0;
+    private int truckid_;
     /**
      * <code>required int32 truckid = 1;</code>
      * @return Whether the truckid field is set.
@@ -8224,8 +8176,7 @@ public final class WorldUps1 {
     }
 
     public static final int STATUS_FIELD_NUMBER = 2;
-    @SuppressWarnings("serial")
-    private volatile java.lang.Object status_ = "";
+    private volatile java.lang.Object status_;
     /**
      * <code>required string status = 2;</code>
      * @return Whether the status field is set.
@@ -8273,7 +8224,7 @@ public final class WorldUps1 {
     }
 
     public static final int X_FIELD_NUMBER = 3;
-    private int x_ = 0;
+    private int x_;
     /**
      * <code>required int32 x = 3;</code>
      * @return Whether the x field is set.
@@ -8292,7 +8243,7 @@ public final class WorldUps1 {
     }
 
     public static final int Y_FIELD_NUMBER = 4;
-    private int y_ = 0;
+    private int y_;
     /**
      * <code>required int32 y = 4;</code>
      * @return Whether the y field is set.
@@ -8311,7 +8262,7 @@ public final class WorldUps1 {
     }
 
     public static final int SEQNUM_FIELD_NUMBER = 5;
-    private long seqnum_ = 0L;
+    private long seqnum_;
     /**
      * <code>required int64 seqnum = 5;</code>
      * @return Whether the seqnum field is set.
@@ -8606,12 +8557,16 @@ public final class WorldUps1 {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        bitField0_ = 0;
         truckid_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000001);
         status_ = "";
+        bitField0_ = (bitField0_ & ~0x00000002);
         x_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000004);
         y_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000008);
         seqnum_ = 0L;
+        bitField0_ = (bitField0_ & ~0x00000010);
         return this;
       }
 
@@ -8638,12 +8593,6 @@ public final class WorldUps1 {
       @java.lang.Override
       public WorldUps1.UTruck buildPartial() {
         WorldUps1.UTruck result = new WorldUps1.UTruck(this);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartial0(WorldUps1.UTruck result) {
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         if (((from_bitField0_ & 0x00000001) != 0)) {
@@ -8651,9 +8600,9 @@ public final class WorldUps1 {
           to_bitField0_ |= 0x00000001;
         }
         if (((from_bitField0_ & 0x00000002) != 0)) {
-          result.status_ = status_;
           to_bitField0_ |= 0x00000002;
         }
+        result.status_ = status_;
         if (((from_bitField0_ & 0x00000004) != 0)) {
           result.x_ = x_;
           to_bitField0_ |= 0x00000004;
@@ -8666,7 +8615,9 @@ public final class WorldUps1 {
           result.seqnum_ = seqnum_;
           to_bitField0_ |= 0x00000010;
         }
-        result.bitField0_ |= to_bitField0_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
       }
 
       @java.lang.Override
@@ -8717,8 +8668,8 @@ public final class WorldUps1 {
           setTruckid(other.getTruckid());
         }
         if (other.hasStatus()) {
-          status_ = other.status_;
           bitField0_ |= 0x00000002;
+          status_ = other.status_;
           onChanged();
         }
         if (other.hasX()) {
@@ -8836,9 +8787,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setTruckid(int value) {
-        
-        truckid_ = value;
         bitField0_ |= 0x00000001;
+        truckid_ = value;
         onChanged();
         return this;
       }
@@ -8903,9 +8853,11 @@ public final class WorldUps1 {
        */
       public Builder setStatus(
           java.lang.String value) {
-        if (value == null) { throw new NullPointerException(); }
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  bitField0_ |= 0x00000002;
         status_ = value;
-        bitField0_ |= 0x00000002;
         onChanged();
         return this;
       }
@@ -8914,8 +8866,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder clearStatus() {
-        status_ = getDefaultInstance().getStatus();
         bitField0_ = (bitField0_ & ~0x00000002);
+        status_ = getDefaultInstance().getStatus();
         onChanged();
         return this;
       }
@@ -8926,9 +8878,11 @@ public final class WorldUps1 {
        */
       public Builder setStatusBytes(
           com.google.protobuf.ByteString value) {
-        if (value == null) { throw new NullPointerException(); }
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  bitField0_ |= 0x00000002;
         status_ = value;
-        bitField0_ |= 0x00000002;
         onChanged();
         return this;
       }
@@ -8956,9 +8910,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setX(int value) {
-        
-        x_ = value;
         bitField0_ |= 0x00000004;
+        x_ = value;
         onChanged();
         return this;
       }
@@ -8996,9 +8949,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setY(int value) {
-        
-        y_ = value;
         bitField0_ |= 0x00000008;
+        y_ = value;
         onChanged();
         return this;
       }
@@ -9036,9 +8988,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setSeqnum(long value) {
-        
-        seqnum_ = value;
         bitField0_ |= 0x00000010;
+        seqnum_ = value;
         onChanged();
         return this;
       }
@@ -9277,7 +9228,6 @@ public final class WorldUps1 {
 
     private int bitField0_;
     public static final int PICKUPS_FIELD_NUMBER = 1;
-    @SuppressWarnings("serial")
     private java.util.List<WorldUps1.UGoPickup> pickups_;
     /**
      * <code>repeated .UGoPickup pickups = 1;</code>
@@ -9318,7 +9268,6 @@ public final class WorldUps1 {
     }
 
     public static final int DELIVERIES_FIELD_NUMBER = 2;
-    @SuppressWarnings("serial")
     private java.util.List<WorldUps1.UGoDeliver> deliveries_;
     /**
      * <code>repeated .UGoDeliver deliveries = 2;</code>
@@ -9359,7 +9308,7 @@ public final class WorldUps1 {
     }
 
     public static final int SIMSPEED_FIELD_NUMBER = 3;
-    private int simspeed_ = 0;
+    private int simspeed_;
     /**
      * <code>optional uint32 simspeed = 3;</code>
      * @return Whether the simspeed field is set.
@@ -9378,7 +9327,7 @@ public final class WorldUps1 {
     }
 
     public static final int DISCONNECT_FIELD_NUMBER = 4;
-    private boolean disconnect_ = false;
+    private boolean disconnect_;
     /**
      * <code>optional bool disconnect = 4;</code>
      * @return Whether the disconnect field is set.
@@ -9397,7 +9346,6 @@ public final class WorldUps1 {
     }
 
     public static final int QUERIES_FIELD_NUMBER = 5;
-    @SuppressWarnings("serial")
     private java.util.List<WorldUps1.UQuery> queries_;
     /**
      * <code>repeated .UQuery queries = 5;</code>
@@ -9438,7 +9386,6 @@ public final class WorldUps1 {
     }
 
     public static final int ACKS_FIELD_NUMBER = 6;
-    @SuppressWarnings("serial")
     private com.google.protobuf.Internal.LongList acks_;
     /**
      * <code>repeated int64 acks = 6;</code>
@@ -9750,7 +9697,6 @@ public final class WorldUps1 {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        bitField0_ = 0;
         if (pickupsBuilder_ == null) {
           pickups_ = java.util.Collections.emptyList();
         } else {
@@ -9766,7 +9712,9 @@ public final class WorldUps1 {
         }
         bitField0_ = (bitField0_ & ~0x00000002);
         simspeed_ = 0;
+        bitField0_ = (bitField0_ & ~0x00000004);
         disconnect_ = false;
+        bitField0_ = (bitField0_ & ~0x00000008);
         if (queriesBuilder_ == null) {
           queries_ = java.util.Collections.emptyList();
         } else {
@@ -9775,6 +9723,7 @@ public final class WorldUps1 {
         }
         bitField0_ = (bitField0_ & ~0x00000010);
         acks_ = emptyLongList();
+        bitField0_ = (bitField0_ & ~0x00000020);
         return this;
       }
 
@@ -9801,13 +9750,8 @@ public final class WorldUps1 {
       @java.lang.Override
       public WorldUps1.UCommands buildPartial() {
         WorldUps1.UCommands result = new WorldUps1.UCommands(this);
-        buildPartialRepeatedFields(result);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartialRepeatedFields(WorldUps1.UCommands result) {
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
         if (pickupsBuilder_ == null) {
           if (((bitField0_ & 0x00000001) != 0)) {
             pickups_ = java.util.Collections.unmodifiableList(pickups_);
@@ -9826,6 +9770,14 @@ public final class WorldUps1 {
         } else {
           result.deliveries_ = deliveriesBuilder_.build();
         }
+        if (((from_bitField0_ & 0x00000004) != 0)) {
+          result.simspeed_ = simspeed_;
+          to_bitField0_ |= 0x00000001;
+        }
+        if (((from_bitField0_ & 0x00000008) != 0)) {
+          result.disconnect_ = disconnect_;
+          to_bitField0_ |= 0x00000002;
+        }
         if (queriesBuilder_ == null) {
           if (((bitField0_ & 0x00000010) != 0)) {
             queries_ = java.util.Collections.unmodifiableList(queries_);
@@ -9840,20 +9792,9 @@ public final class WorldUps1 {
           bitField0_ = (bitField0_ & ~0x00000020);
         }
         result.acks_ = acks_;
-      }
-
-      private void buildPartial0(WorldUps1.UCommands result) {
-        int from_bitField0_ = bitField0_;
-        int to_bitField0_ = 0;
-        if (((from_bitField0_ & 0x00000004) != 0)) {
-          result.simspeed_ = simspeed_;
-          to_bitField0_ |= 0x00000001;
-        }
-        if (((from_bitField0_ & 0x00000008) != 0)) {
-          result.disconnect_ = disconnect_;
-          to_bitField0_ |= 0x00000002;
-        }
-        result.bitField0_ |= to_bitField0_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
       }
 
       @java.lang.Override
@@ -10620,9 +10561,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setSimspeed(int value) {
-        
-        simspeed_ = value;
         bitField0_ |= 0x00000004;
+        simspeed_ = value;
         onChanged();
         return this;
       }
@@ -10660,9 +10600,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setDisconnect(boolean value) {
-        
-        disconnect_ = value;
         bitField0_ |= 0x00000008;
+        disconnect_ = value;
         onChanged();
         return this;
       }
@@ -10922,7 +10861,7 @@ public final class WorldUps1 {
         if (!((bitField0_ & 0x00000020) != 0)) {
           acks_ = mutableCopy(acks_);
           bitField0_ |= 0x00000020;
-        }
+         }
       }
       /**
        * <code>repeated int64 acks = 6;</code>
@@ -10956,7 +10895,6 @@ public final class WorldUps1 {
        */
       public Builder setAcks(
           int index, long value) {
-        
         ensureAcksIsMutable();
         acks_.setLong(index, value);
         onChanged();
@@ -10968,7 +10906,6 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder addAcks(long value) {
-        
         ensureAcksIsMutable();
         acks_.addLong(value);
         onChanged();
@@ -11236,7 +11173,6 @@ public final class WorldUps1 {
 
     private int bitField0_;
     public static final int COMPLETIONS_FIELD_NUMBER = 1;
-    @SuppressWarnings("serial")
     private java.util.List<WorldUps1.UFinished> completions_;
     /**
      * <code>repeated .UFinished completions = 1;</code>
@@ -11277,7 +11213,6 @@ public final class WorldUps1 {
     }
 
     public static final int DELIVERED_FIELD_NUMBER = 2;
-    @SuppressWarnings("serial")
     private java.util.List<WorldUps1.UDeliveryMade> delivered_;
     /**
      * <code>repeated .UDeliveryMade delivered = 2;</code>
@@ -11318,7 +11253,7 @@ public final class WorldUps1 {
     }
 
     public static final int FINISHED_FIELD_NUMBER = 3;
-    private boolean finished_ = false;
+    private boolean finished_;
     /**
      * <code>optional bool finished = 3;</code>
      * @return Whether the finished field is set.
@@ -11337,7 +11272,6 @@ public final class WorldUps1 {
     }
 
     public static final int ACKS_FIELD_NUMBER = 4;
-    @SuppressWarnings("serial")
     private com.google.protobuf.Internal.LongList acks_;
     /**
      * <code>repeated int64 acks = 4;</code>
@@ -11365,7 +11299,6 @@ public final class WorldUps1 {
     }
 
     public static final int TRUCKSTATUS_FIELD_NUMBER = 5;
-    @SuppressWarnings("serial")
     private java.util.List<WorldUps1.UTruck> truckstatus_;
     /**
      * <code>repeated .UTruck truckstatus = 5;</code>
@@ -11406,7 +11339,6 @@ public final class WorldUps1 {
     }
 
     public static final int ERROR_FIELD_NUMBER = 6;
-    @SuppressWarnings("serial")
     private java.util.List<WorldUps1.UErr> error_;
     /**
      * <code>repeated .UErr error = 6;</code>
@@ -11734,7 +11666,6 @@ public final class WorldUps1 {
       @java.lang.Override
       public Builder clear() {
         super.clear();
-        bitField0_ = 0;
         if (completionsBuilder_ == null) {
           completions_ = java.util.Collections.emptyList();
         } else {
@@ -11750,7 +11681,9 @@ public final class WorldUps1 {
         }
         bitField0_ = (bitField0_ & ~0x00000002);
         finished_ = false;
+        bitField0_ = (bitField0_ & ~0x00000004);
         acks_ = emptyLongList();
+        bitField0_ = (bitField0_ & ~0x00000008);
         if (truckstatusBuilder_ == null) {
           truckstatus_ = java.util.Collections.emptyList();
         } else {
@@ -11791,13 +11724,8 @@ public final class WorldUps1 {
       @java.lang.Override
       public WorldUps1.UResponses buildPartial() {
         WorldUps1.UResponses result = new WorldUps1.UResponses(this);
-        buildPartialRepeatedFields(result);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartialRepeatedFields(WorldUps1.UResponses result) {
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
         if (completionsBuilder_ == null) {
           if (((bitField0_ & 0x00000001) != 0)) {
             completions_ = java.util.Collections.unmodifiableList(completions_);
@@ -11815,6 +11743,10 @@ public final class WorldUps1 {
           result.delivered_ = delivered_;
         } else {
           result.delivered_ = deliveredBuilder_.build();
+        }
+        if (((from_bitField0_ & 0x00000004) != 0)) {
+          result.finished_ = finished_;
+          to_bitField0_ |= 0x00000001;
         }
         if (((bitField0_ & 0x00000008) != 0)) {
           acks_.makeImmutable();
@@ -11839,16 +11771,9 @@ public final class WorldUps1 {
         } else {
           result.error_ = errorBuilder_.build();
         }
-      }
-
-      private void buildPartial0(WorldUps1.UResponses result) {
-        int from_bitField0_ = bitField0_;
-        int to_bitField0_ = 0;
-        if (((from_bitField0_ & 0x00000004) != 0)) {
-          result.finished_ = finished_;
-          to_bitField0_ |= 0x00000001;
-        }
-        result.bitField0_ |= to_bitField0_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
       }
 
       @java.lang.Override
@@ -12651,9 +12576,8 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder setFinished(boolean value) {
-        
-        finished_ = value;
         bitField0_ |= 0x00000004;
+        finished_ = value;
         onChanged();
         return this;
       }
@@ -12673,7 +12597,7 @@ public final class WorldUps1 {
         if (!((bitField0_ & 0x00000008) != 0)) {
           acks_ = mutableCopy(acks_);
           bitField0_ |= 0x00000008;
-        }
+         }
       }
       /**
        * <code>repeated int64 acks = 4;</code>
@@ -12707,7 +12631,6 @@ public final class WorldUps1 {
        */
       public Builder setAcks(
           int index, long value) {
-        
         ensureAcksIsMutable();
         acks_.setLong(index, value);
         onChanged();
@@ -12719,7 +12642,6 @@ public final class WorldUps1 {
        * @return This builder for chaining.
        */
       public Builder addAcks(long value) {
-        
         ensureAcksIsMutable();
         acks_.addLong(value);
         onChanged();
