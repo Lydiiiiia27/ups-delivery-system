@@ -8,6 +8,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @Configuration
+@Profile("test")
 @PropertySource("classpath:application-test.properties")
 public class TestConfig {
 

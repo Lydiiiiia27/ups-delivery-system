@@ -94,6 +94,7 @@ com/ups/service/world/WorldConnector.class
 com/ups/model/amazon/CreateShipmentRequest$ShipmentInfo.class
 com/ups/WorldUpsProto$UInitTruckOrBuilder.class
 com/ups/model/entity/Truck.class
+com/ups/config/TestConfig.class
 com/ups/WorldUpsProto$UDeliveryLocation$Builder.class
 com/ups/WorldUpsProto$UGoDeliver$1.class
 com/ups/WorldUpsProto$UDeliveryLocationOrBuilder.class

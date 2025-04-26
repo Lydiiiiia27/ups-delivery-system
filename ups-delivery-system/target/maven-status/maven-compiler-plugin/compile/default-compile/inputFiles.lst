@@ -4,6 +4,7 @@
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/model/amazon/QueryShipmentStatusResponse.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/repository/UserRepository.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/config/SecurityConfig.java
+/home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/config/TestConfig.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/model/CreateShipmentResponse.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/controller/DashboardController.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/main/java/com/ups/model/entity/TruckStatus.java
