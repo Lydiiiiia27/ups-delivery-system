@@ -1,93 +1,133 @@
-# ERSS-project-ys467-jt454
+# UPS Delivery System
 
+This project implements a UPS delivery system that interfaces with Amazon's shipping API and a World simulator.
 
+## Getting Started
 
-## Getting started
+### Prerequisites
+- Java 17
+- Maven
+- PostgreSQL (optional, H2 in-memory database available for development)
+- World simulator running
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+### Installation and Setup
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.oit.duke.edu/jt454/erss-project-ys467-jt454.git
-git branch -M main
-git push -uf origin main
+1. Clone the repository
+```bash
+git clone https://gitlab.oit.duke.edu/jt454/erss-project-ys467-jt454.git
+cd erss-project-ys467-jt454/ups-delivery-system
 ```
 
-## Integrate with your tools
+2. Build the project
+```bash
+mvn clean install
+```
 
-- [ ] [Set up project integrations](https://gitlab.oit.duke.edu/jt454/erss-project-ys467-jt454/-/settings/integrations)
+3. Run the application
+```bash
+mvn spring-boot:run
+```
 
-## Collaborate with your team
+The server will start on port 8080 by default.
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+## API Documentation
 
-## Test and Deploy
+### Create Shipment
 
-Use the built-in continuous integration in GitLab.
+#### Example Request
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+Save the JSON to a file (e.g., shipment.json):
 
-***
+```json
+{
+  "message_type": "CreateShipmentRequest",
+  "seq_num": 101,
+  "timestamp": "2023-04-10T15:00:00Z",
+  "shipment_info": {
+    "package_id": 1001,
+    "warehouse_id": 10,
+    "destination": {"x": 3, "y": 5},
+    "ups_account_name": "testuser",
+    "items": [
+      {
+        "product_id": 2001,
+        "description": "Test Product",
+        "count": 2
+      }
+    ]
+  }
+}
+```
 
-# Editing this README
+#### Using curl
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+Send the request using curl with a file:
+```bash
+curl -X POST -H "Content-Type: application/json" -d @shipment.json http://vcm-46935.vm.duke.edu:8080/api/createshipment
+```
 
-## Suggestions for a good README
+Or as a single command with the JSON inline:
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"message_type":"CreateShipmentRequest","seq_num":101,"timestamp":"2023-04-10T15:00:00Z","shipment_info":{"package_id":1001,"warehouse_id":10,"destination":{"x":3,"y":5},"ups_account_name":"testuser","items":[{"product_id":2001,"description":"Test Product","count":2}]}}' http://vcm-46935.vm.duke.edu:8080/api/createshipment
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+#### Using Postman
 
-## Name
-Choose a self-explaining name for your project.
+1. Download and install Postman from [postman.com](https://www.postman.com/downloads/)
+2. Create a new request with:
+   - Method: POST
+   - URL: http://vcm-46935.vm.duke.edu:8080/api/createshipment
+   - Body: Select "raw" and "JSON", then paste your JSON
+3. Click "Send"
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+A successful response will look like:
+```json
+{
+  "message_type": "CreateShipmentResponse",
+  "seq_num": 201,
+  "timestamp": "2023-04-10T15:01:00Z",
+  "status": "ACCEPTED",
+  "truck_id": 55
+}
+```
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+## Implementation Roadmap
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### World Communication (Member 1)
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+- Ensure the World simulator is running in your environment
+- Test the connection to the World simulator
+- Implement handlers for World responses
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### Amazon API & Web Interface (Member 2)
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+- Complete the ShipmentServiceImpl class
+- Implement database operations for shipment tracking
+- Connect the web UI with the backend
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+### Next Steps
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+- Complete actual implementation of ShipmentServiceImpl to:
+  - Create a real package entry in the database
+  - Associate it with a user (if the UPS account name exists)
+  - Select an available truck
+  - Communicate with the World simulator to send the truck for pickup
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+- Test the web interface to verify that:
+  - New shipments appear in the dashboard for logged-in users
+  - Package tracking works for the created packages
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+- Implement the remaining API endpoints for:
+  - ChangeDestinationRequest
+  - QueryShipmentStatusRequest
+  - Handling incoming notifications from Amazon
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+## Project Status
 
-## License
-For open source projects, say how it is licensed.
+The basic API communication with Amazon is functional. The current implementation:
+- Has Spring Boot application running properly
+- Includes AmazonApiController that handles incoming requests
+- Has a mock ShipmentServiceImpl that generates responses
+- Correctly configured API endpoints
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Implementation is ongoing for database integration and World simulator communication.

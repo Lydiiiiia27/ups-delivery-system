@@ -242,4 +242,28 @@ public class WorldConnector {
     public long getNextSeqNum() {
         return seqNum.getAndIncrement();
     }
+
+    // Add a simple test method in WorldConnector
+    public void testConnection() {
+    try {
+        // Initialize with a few test trucks
+        List<Truck> trucks = new ArrayList<>();
+        Truck truck = new Truck();
+        truck.setId(1);
+        truck.setX(0);
+        truck.setY(0);
+        trucks.add(truck);
+        
+        WorldConnector connector = new WorldConnector("localhost", 12345, trucks);
+        System.out.println("Connected to world with ID: " + connector.getWorldId());
+        
+        // Test a pickup request
+        connector.pickup(1, 1, connector.getNextSeqNum());
+        
+        // Disconnect
+        connector.disconnect();
+    } catch (Exception e) {
+        e.printStackTrace();
+        }
+    }
 }
