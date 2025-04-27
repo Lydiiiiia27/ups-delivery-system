@@ -30,6 +30,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Service for sending notifications to Amazon about package and truck status
+ */
 @Service
 public class AmazonNotificationService {
     
@@ -40,16 +43,16 @@ public class AmazonNotificationService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     
-    // Cache for storing sent messages and their responses for idempotency
-    private final Map<Long, ResponseEntity<?>> responseCache = new ConcurrentHashMap<>();
+    // Cache for tracking responses to avoid duplicate processing
+    private final Map<Long, Object> responseCache = new ConcurrentHashMap<>();
     
-    // Maximum retry attempts
+    // Maximum retry attempts for failed notifications
     private static final int MAX_RETRY_ATTEMPTS = 3;
     
-    // Retry interval in milliseconds
-    private static final long RETRY_INTERVAL = 5000; // 5 seconds
+    // Retry delay in milliseconds
+    private static final long RETRY_DELAY_MS = 5000; // 5 seconds
     
-    @Value("${amazon.service.url:http://amazon-mock:8080}")
+    @Value("${amazon.service.url:http://amazon:8080}")
     private String amazonServiceUrl;
     
     @Autowired
@@ -62,42 +65,32 @@ public class AmazonNotificationService {
         this.messageLogRepository = messageLogRepository;
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
-        
-        // Ensure the ObjectMapper can handle Java 8 date/time types if not already configured
-        try {
-            // Test if the ObjectMapper can serialize an Instant
-            objectMapper.writeValueAsString(Instant.now());
-        } catch (Exception e) {
-            if (e.getMessage().contains("Java 8 date/time type")) {
-                logger.info("Configuring ObjectMapper to handle Java 8 date/time types");
-                // Register JavaTimeModule if not already registered
-                try {
-                    Class<?> javaTimeModule = Class.forName("com.fasterxml.jackson.datatype.jsr310.JavaTimeModule");
-                    objectMapper.registerModule((com.fasterxml.jackson.databind.Module) javaTimeModule.getDeclaredConstructor().newInstance());
-                } catch (Exception ex) {
-                    logger.error("Failed to register JavaTimeModule: {}", ex.getMessage());
-                }
-            }
-        }
     }
     
     @PostConstruct
     public void init() {
+        logger.info("Initializing Amazon Notification Service with URL: {}", amazonServiceUrl);
+        
         // Check if we have an environment variable that overrides the property
         String envUrl = System.getenv("AMAZON_SERVICE_URL");
         if (envUrl != null && !envUrl.trim().isEmpty()) {
             logger.info("Using Amazon service URL from environment: {}", envUrl);
             this.amazonServiceUrl = envUrl;
-        } else {
-            logger.info("Using Amazon service URL from properties: {}", amazonServiceUrl);
         }
     }
     
     /**
      * Notify Amazon that a truck has arrived at the warehouse
-     * @return ResponseEntity containing the response from Amazon
+     * @param pkg The package to pick up
+     * @param truck The truck that arrived
+     * @param warehouse The warehouse where the truck arrived
+     * @return The response from Amazon
      */
     public ResponseEntity<?> notifyTruckArrival(Package pkg, Truck truck, Warehouse warehouse) {
+        logger.info("Notifying Amazon about truck {} arrival at warehouse {} for package {}",
+                truck.getId(), warehouse.getId(), pkg.getId());
+        
+        // Create the notification
         NotifyTruckArrived notification = new NotifyTruckArrived();
         notification.setMessageType("NotifyTruckArrived");
         notification.setSeqNum(messageTrackingService.getNextSeqNum());
@@ -106,17 +99,25 @@ public class AmazonNotificationService {
         notification.setTruckId(truck.getId());
         notification.setWarehouseId(warehouse.getId());
         
-        logger.info("Notifying Amazon about truck {} arrival at warehouse {} for package {}", 
-                truck.getId(), warehouse.getId(), pkg.getId());
+        // Record the outgoing message
+        messageTrackingService.recordOutgoingMessage(notification.getSeqNum(), notification.getMessageType());
         
-        return sendNotification(notification, "/api/ups/notifications/truck-arrived");
+        // Send the notification to Amazon
+        String endpoint = "/api/ups/notifications/truck-arrived";
+        return sendNotification(notification, endpoint);
     }
     
     /**
      * Notify Amazon that a package has been delivered
-     * @return ResponseEntity containing the response from Amazon
+     * @param pkg The delivered package
+     * @param truck The truck that delivered the package
+     * @return The response from Amazon
      */
     public ResponseEntity<?> notifyDeliveryComplete(Package pkg, Truck truck) {
+        logger.info("Notifying Amazon about delivery completion for package {} by truck {}",
+                pkg.getId(), truck.getId());
+        
+        // Create the notification
         NotifyDeliveryComplete notification = new NotifyDeliveryComplete();
         notification.setMessageType("NotifyDeliveryComplete");
         notification.setSeqNum(messageTrackingService.getNextSeqNum());
@@ -124,127 +125,127 @@ public class AmazonNotificationService {
         notification.setPackageId(pkg.getId());
         notification.setTruckId(truck.getId());
         
-        // Create and set the final location
+        // Set the final delivery location
         NotifyDeliveryComplete.Location location = new NotifyDeliveryComplete.Location(
                 pkg.getDestinationX(), 
-                pkg.getDestinationY()
-        );
+                pkg.getDestinationY());
         notification.setFinalLocation(location);
         
-        logger.info("Notifying Amazon about package {} delivery completion by truck {}", 
-                pkg.getId(), truck.getId());
+        // Record the outgoing message
+        messageTrackingService.recordOutgoingMessage(notification.getSeqNum(), notification.getMessageType());
         
-        return sendNotification(notification, "/api/ups/notifications/delivery-complete");
+        // Send the notification to Amazon
+        String endpoint = "/api/ups/notifications/delivery-complete";
+        return sendNotification(notification, endpoint);
     }
     
     /**
-     * Send a status update to Amazon about a package
-     * @return ResponseEntity containing the response from Amazon
+     * Send a status update to Amazon
+     * @param pkg The package
+     * @param truck The truck (can be null)
+     * @param status The status message
+     * @param details Additional details about the status
+     * @return The response from Amazon
      */
     public ResponseEntity<?> sendStatusUpdate(Package pkg, Truck truck, String status, String details) {
+        logger.info("Sending status update to Amazon for package {}: {}", pkg.getId(), status);
+        
+        // Create the status update
         UpdateShipmentStatus update = new UpdateShipmentStatus();
         update.setMessageType("UpdateShipmentStatus");
         update.setSeqNum(messageTrackingService.getNextSeqNum());
         update.setTimestamp(Instant.now());
         update.setPackageId(pkg.getId());
-        update.setTruckId(truck != null ? truck.getId() : null);
-        update.setStatus(status);
-        update.setDetails(details);
         
         if (truck != null) {
+            update.setTruckId(truck.getId());
+            
+            // Set the current location if truck is available
             UpdateShipmentStatus.Location location = new UpdateShipmentStatus.Location(
                     truck.getX(), 
-                    truck.getY()
-            );
+                    truck.getY());
             update.setCurrentLocation(location);
         }
         
-        logger.info("Sending status update to Amazon for package {}: {}", pkg.getId(), status);
+        update.setStatus(status);
+        update.setDetails(details);
         
-        return sendNotification(update, "/api/ups/notifications/status-update");
+        // Record the outgoing message
+        messageTrackingService.recordOutgoingMessage(update.getSeqNum(), update.getMessageType());
+        
+        // Send the notification to Amazon
+        String endpoint = "/api/ups/notifications/status-update";
+        return sendNotification(update, endpoint);
     }
     
     /**
-     * Generic method to send notification to Amazon with manual retry mechanism
-     * @return ResponseEntity containing the response from Amazon
+     * Send a notification to Amazon with retry logic
+     * @param notification The notification to send
+     * @param endpoint The API endpoint to send to
+     * @return The response from Amazon
      */
     private ResponseEntity<?> sendNotification(Object notification, String endpoint) {
-        // Extract sequence number for tracking
-        Long seqNum = extractSeqNum(notification);
-        
-        // Check if we already have a response for this sequence number
-        if (responseCache.containsKey(seqNum)) {
-            logger.info("Found cached response for message with sequence number: {}", seqNum);
-            return responseCache.get(seqNum);
-        }
-        
-        // Record the outgoing message
-        String messageType = extractMessageType(notification);
-        messageTrackingService.recordOutgoingMessage(seqNum, messageType);
-        
-        // Prepare HTTP request
+        // Prepare HTTP headers
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         
-        ResponseEntity<?> response = null;
-        Exception lastException = null;
+        // Extract sequence number for caching
+        Long seqNum = extractSeqNum(notification);
         
-        // Manual retry logic
+        // Check cache for duplicate requests
+        if (responseCache.containsKey(seqNum)) {
+            logger.debug("Using cached response for notification with seq_num: {}", seqNum);
+            return (ResponseEntity<?>) responseCache.get(seqNum);
+        }
+        
+        // Implement retry logic
         for (int attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
             try {
-                String jsonBody = objectMapper.writeValueAsString(notification);
-                HttpEntity<String> request = new HttpEntity<>(jsonBody, headers);
-                
-                // Send the notification
                 String url = amazonServiceUrl + endpoint;
                 
-                // Use Object.class as the response type for flexibility
-                response = restTemplate.postForEntity(url, request, Object.class);
+                // Convert notification to JSON
+                String jsonBody = objectMapper.writeValueAsString(notification);
+                HttpEntity<String> requestEntity = new HttpEntity<>(jsonBody, headers);
                 
-                // If successful, break the retry loop
-                if (response.getStatusCode().is2xxSuccessful()) {
-                    // Cache the response
-                    responseCache.put(seqNum, response);
-                    
-                    // Update the message log to mark as sent
-                    markMessageAsSent(seqNum);
-                    
-                    logger.info("Successfully sent notification to Amazon: {} with seq num: {} (attempt {})", 
-                            endpoint, seqNum, attempt + 1);
-                    
-                    return response;
-                }
+                // Send the request
+                ResponseEntity<Object> response = restTemplate.postForEntity(url, requestEntity, Object.class);
+                
+                // Cache the response
+                responseCache.put(seqNum, response);
+                
+                // Mark message as acknowledged
+                messageTrackingService.acknowledgeMessage(seqNum);
+                
+                logger.info("Successfully sent notification to Amazon: {} (attempt {})", endpoint, attempt + 1);
+                return response;
             } catch (Exception e) {
-                lastException = e;
-                logger.warn("Failed to send notification to Amazon: {} with seq num: {}, Error: {} (attempt {})", 
-                        endpoint, seqNum, e.getMessage(), attempt + 1);
+                logger.warn("Failed to send notification to Amazon: {} (attempt {}): {}", 
+                        endpoint, attempt + 1, e.getMessage());
                 
                 // Wait before retrying
-                try {
-                    Thread.sleep(RETRY_INTERVAL);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    break;
+                if (attempt < MAX_RETRY_ATTEMPTS - 1) {
+                    try {
+                        Thread.sleep(RETRY_DELAY_MS);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
                 }
             }
         }
         
-        // If we get here, all retry attempts failed
-        logger.error("All {} retry attempts failed for notification to Amazon: {} with seq num: {}", 
-                MAX_RETRY_ATTEMPTS, endpoint, seqNum);
+        // All retry attempts failed
+        logger.error("Failed to send notification to Amazon after {} attempts: {}", 
+                MAX_RETRY_ATTEMPTS, endpoint);
         
-        // Mark message as failed
-        if (lastException != null) {
-            markMessageAsFailed(seqNum, lastException.getMessage());
-        }
-        
-        // Return a default response or throw an exception
         throw new RestClientException("Failed to send notification to Amazon after " + 
-                MAX_RETRY_ATTEMPTS + " retry attempts", lastException);
+                MAX_RETRY_ATTEMPTS + " retry attempts");
     }
     
     /**
-     * Extract sequence number from notification object
+     * Extract sequence number from a notification object
+     * @param notification The notification object
+     * @return The sequence number
      */
     private Long extractSeqNum(Object notification) {
         if (notification instanceof NotifyTruckArrived) {
@@ -258,89 +259,97 @@ public class AmazonNotificationService {
     }
     
     /**
-     * Extract message type from notification object
+     * Clean up response cache periodically
      */
-    private String extractMessageType(Object notification) {
-        if (notification instanceof NotifyTruckArrived) {
-            return ((NotifyTruckArrived) notification).getMessageType();
-        } else if (notification instanceof NotifyDeliveryComplete) {
-            return ((NotifyDeliveryComplete) notification).getMessageType();
-        } else if (notification instanceof UpdateShipmentStatus) {
-            return ((UpdateShipmentStatus) notification).getMessageType();
-        }
-        return "Unknown";
-    }
-    
-    /**
-     * Mark message as successfully sent
-     */
-    private void markMessageAsSent(Long seqNum) {
-        MessageLog log = messageLogRepository.findBySeqNum(seqNum);
-        if (log != null) {
-            log.setAcknowledged(Instant.now());
-            messageLogRepository.save(log);
+    @Scheduled(fixedRate = 3600000) // Once per hour
+    public void cleanupResponseCache() {
+        int size = responseCache.size();
+        logger.info("Cleaning up response cache, current size: {}", size);
+        
+        if (size > 1000) {
+            responseCache.clear();
+            logger.info("Response cache cleared due to size exceeding limit");
         }
     }
     
     /**
-     * Mark message as failed for retry
+     * Scheduled task to clean up old message logs
      */
-    private void markMessageAsFailed(Long seqNum, String errorMessage) {
-        MessageLog log = messageLogRepository.findBySeqNum(seqNum);
-        if (log != null) {
-            // You might want to add error message field to MessageLog entity
-            messageLogRepository.save(log);
+    @Scheduled(cron = "0 0 2 * * *") // Run at 2:00 AM every day
+    public void cleanupOldMessageLogs() {
+        logger.info("Starting cleanup of old message logs");
+        
+        // Define the cutoff date (e.g., 7 days ago)
+        Instant cutoffDate = Instant.now().minus(7, ChronoUnit.DAYS);
+        
+        try {
+            // Find all message logs older than the cutoff date
+            List<MessageLog> oldLogs = messageLogRepository.findByTimestampBefore(cutoffDate);
+            
+            if (oldLogs.isEmpty()) {
+                logger.info("No old message logs to clean up");
+                return;
+            }
+            
+            logger.info("Found {} old message logs to clean up", oldLogs.size());
+            
+            // Delete the old logs
+            messageLogRepository.deleteAll(oldLogs);
+            
+            logger.info("Successfully cleaned up {} old message logs", oldLogs.size());
+        } catch (Exception e) {
+            logger.error("Error cleaning up old message logs", e);
         }
     }
     
     /**
-     * Scheduled task to retry failed notifications
+     * Retry failed notifications
      */
-    @Scheduled(fixedRate = 60000) // Run every minute
+    @Scheduled(fixedRate = 60000) // Every minute
     public void retryFailedNotifications() {
-        logger.info("Starting scheduled retry of failed notifications");
-        
-        // Get all unacknowledged messages
-        List<MessageLog> unacknowledgedMessages = messageTrackingService.getUnacknowledgedMessages();
-        
-        if (unacknowledgedMessages.isEmpty()) {
+        List<String> unacknowledgedMessageIds = messageLogRepository.findUnacknowledgedMessageIds("OUTGOING");
+        if (unacknowledgedMessageIds.isEmpty()) {
             logger.debug("No failed notifications to retry");
             return;
         }
         
-        logger.info("Found {} failed notifications to retry", unacknowledgedMessages.size());
+        logger.info("Retrying {} failed notifications", unacknowledgedMessageIds.size());
         
-        // Process each unacknowledged message
-        for (MessageLog message : unacknowledgedMessages) {
+        for (String seqNumStr : unacknowledgedMessageIds) {
             try {
-                // Only retry messages that are older than 1 minute and less than 24 hours
-                Instant now = Instant.now();
-                long ageInMinutes = Duration.between(message.getTimestamp(), now).toMinutes();
+                Long seqNum = Long.parseLong(seqNumStr);
+                MessageLog message = messageLogRepository.findBySeqNum(seqNum);
                 
-                if (ageInMinutes < 1 || ageInMinutes > 24 * 60) {
-                    // Skip messages that are too new or too old
-                    continue;
-                }
-                
-                logger.info("Retrying notification with seq_num: {}, type: {}, age: {} minutes", 
-                        message.getSeqNum(), message.getMessageType(), ageInMinutes);
-                
-                // Handle different message types
-                switch (message.getMessageType()) {
-                    case "NotifyTruckArrived":
-                        retryTruckArrivalNotification(message);
-                        break;
-                    case "NotifyDeliveryComplete":
-                        retryDeliveryCompleteNotification(message);
-                        break;
-                    case "UpdateShipmentStatus":
-                        retryStatusUpdateNotification(message);
-                        break;
-                    default:
-                        logger.warn("Unknown message type for retry: {}", message.getMessageType());
+                if (message != null) {
+                    // Only retry messages that are older than 1 minute and less than 24 hours
+                    Instant now = Instant.now();
+                    long ageInMinutes = Duration.between(message.getTimestamp(), now).toMinutes();
+                    
+                    if (ageInMinutes < 1 || ageInMinutes > 24 * 60) {
+                        // Skip messages that are too new or too old
+                        continue;
+                    }
+                    
+                    logger.info("Retrying notification with seq_num: {}, type: {}, age: {} minutes", 
+                            seqNum, message.getMessageType(), ageInMinutes);
+                    
+                    // Handle different message types
+                    switch (message.getMessageType()) {
+                        case "NotifyTruckArrived":
+                            retryTruckArrivalNotification(message);
+                            break;
+                        case "NotifyDeliveryComplete":
+                            retryDeliveryCompleteNotification(message);
+                            break;
+                        case "UpdateShipmentStatus":
+                            retryStatusUpdateNotification(message);
+                            break;
+                        default:
+                            logger.warn("Unknown message type for retry: {}", message.getMessageType());
+                    }
                 }
             } catch (Exception e) {
-                logger.error("Error retrying notification with seq_num: {}", message.getSeqNum(), e);
+                logger.error("Error retrying notification with seq_num: {}", seqNumStr, e);
             }
         }
     }
@@ -376,50 +385,5 @@ public class AmazonNotificationService {
         // Similar to above
         messageTrackingService.acknowledgeMessage(message.getSeqNum());
         logger.info("Marked status update as acknowledged (no retry): {}", message.getSeqNum());
-    }
-    
-    /**
-     * Scheduled task to clean up old message logs
-     */
-    @Scheduled(cron = "0 0 2 * * *") // Run at 2:00 AM every day
-    public void cleanupOldMessageLogs() {
-        logger.info("Starting cleanup of old message logs");
-        
-        // Define the cutoff date (e.g., 7 days ago)
-        Instant cutoffDate = Instant.now().minus(7, ChronoUnit.DAYS);
-        
-        try {
-            // Find all message logs older than the cutoff date
-            List<MessageLog> oldLogs = messageLogRepository.findByTimestampBefore(cutoffDate);
-            
-            if (oldLogs.isEmpty()) {
-                logger.info("No old message logs to clean up");
-                return;
-            }
-            
-            logger.info("Found {} old message logs to clean up", oldLogs.size());
-            
-            // Delete the old logs
-            messageLogRepository.deleteAll(oldLogs);
-            
-            logger.info("Successfully cleaned up {} old message logs", oldLogs.size());
-        } catch (Exception e) {
-            logger.error("Error cleaning up old message logs", e);
-        }
-    }
-    
-    /**
-     * Cleanup response cache periodically to prevent memory issues
-     */
-    @Scheduled(fixedRate = 3600000) // Run every hour
-    public void cleanupResponseCache() {
-        int cacheSize = responseCache.size();
-        logger.info("Cleaning up response cache, current size: {}", cacheSize);
-        
-        if (cacheSize > 1000) {
-            // Only keep cache entries for the last 1000 messages
-            responseCache.clear();
-            logger.info("Response cache cleared due to size exceeding limit");
-        }
     }
 }

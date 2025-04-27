@@ -1,4 +1,4 @@
-package com.ups.model.amazon;
+package com.ups.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Instant;

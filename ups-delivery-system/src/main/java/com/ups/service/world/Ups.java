@@ -22,6 +22,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Main service for interacting with the UPS World Simulator
+ */
 @Service
 public class Ups {
     private static final Logger logger = LoggerFactory.getLogger(Ups.class);
@@ -41,20 +44,31 @@ public class Ups {
     @Value("${ups.init.trucks:5}")
     private int initialTruckCount;
     
-    @Value("${ups.world.sim.speed:1000}")
+    @Value("${ups.world.sim.speed:100}")
     private int worldSimSpeed;
+    
+    @Value("${ups.world.create.new:false}")
+    private boolean createNewWorld;
+    
+    @Value("${ups.world.id:0}")
+    private long existingWorldId;
     
     @Autowired
     public Ups(TruckRepository truckRepository, 
                PackageRepository packageRepository,
                WorldResponseListener responseListener,
-               WorldResponseHandler responseHandler) {
+               WorldResponseHandler responseHandler,
+               WorldConnector worldConnector) {
         this.truckRepository = truckRepository;
         this.packageRepository = packageRepository;
         this.responseListener = responseListener;
         this.responseHandler = responseHandler;
+        this.worldConnector = worldConnector;
     }
     
+    /**
+     * Initialize the UPS service and connect to the World Simulator
+     */
     @PostConstruct
     public void initialize() {
         try {
@@ -66,9 +80,18 @@ public class Ups {
                 trucks = truckRepository.findAll();
             }
             
-            // Connect to world simulator with response listener
+            // Connect to world simulator
             try {
-                this.worldConnector = new WorldConnector(worldHost, worldPort, trucks, responseListener);
+                if (createNewWorld) {
+                    // Create a new world
+                    worldConnector.connect(worldHost, worldPort, trucks, true, null);
+                } else if (existingWorldId > 0) {
+                    // Connect to existing world
+                    worldConnector.connect(worldHost, worldPort, trucks, false, existingWorldId);
+                } else {
+                    // No world ID specified, create a new world
+                    worldConnector.connect(worldHost, worldPort, trucks, true, null);
+                }
                 
                 // Set simulation speed
                 worldConnector.setSimulationSpeed(worldSimSpeed);
@@ -92,19 +115,19 @@ public class Ups {
                 logger.error("Response handler thread failed", ex);
                 return null;
             });
-        } catch (IOException e) {
+        } catch (Exception e) {
             logger.error("Failed to initialize UPS service: {}", e.getMessage(), e);
         }
     }
     
+    /**
+     * Clean up resources when the service is destroyed
+     */
     @PreDestroy
     public void cleanup() {
         try {
             // Stop the response handler
             responseHandler.stop();
-            
-            // Stop the response listener
-            responseListener.stopListening();
             
             // Disconnect from world simulator
             if (worldConnector != null && worldConnector.isConnected()) {
@@ -116,7 +139,12 @@ public class Ups {
         }
     }
     
+    /**
+     * Create initial trucks
+     */
     private void createInitialTrucks() {
+        logger.info("Creating {} initial trucks", initialTruckCount);
+        
         // Create initial trucks at default location (0,0)
         for (int i = 0; i < initialTruckCount; i++) {
             Truck truck = new Truck();
@@ -128,97 +156,126 @@ public class Ups {
         }
     }
     
+    /**
+     * Send a truck to pick up a package from a warehouse
+     * @param truckId The ID of the truck
+     * @param warehouseId The ID of the warehouse
+     */
     @Transactional
     public void sendTruckToPickup(int truckId, int warehouseId) {
         try {
-            // Update truck status in database
+            // Find the truck
             Optional<Truck> truckOpt = truckRepository.findById(truckId);
-            if (truckOpt.isPresent()) {
-                Truck truck = truckOpt.get();
-                truck.setStatus(TruckStatus.TRAVELING);
-                truckRepository.save(truck);
-                
-                // Send command to world simulator if connected
-                if (worldConnector != null && worldConnector.isConnected()) {
-                    worldConnector.pickup(truckId, warehouseId, worldConnector.getNextSeqNum());
-                    logger.info("Sent truck {} to warehouse {}", truckId, warehouseId);
-                } else {
-                    logger.warn("Not connected to world simulator. Database updated but command not sent.");
-                }
-            } else {
+            if (truckOpt.isEmpty()) {
                 logger.error("Truck with ID {} not found", truckId);
+                return;
+            }
+            
+            Truck truck = truckOpt.get();
+            
+            // Update truck status
+            truck.setStatus(TruckStatus.TRAVELING);
+            truckRepository.save(truck);
+            
+            // Send command to world simulator
+            if (worldConnector != null && worldConnector.isConnected()) {
+                worldConnector.pickup(truckId, warehouseId);
+                logger.info("Sent truck {} to warehouse {}", truckId, warehouseId);
+            } else {
+                logger.warn("Not connected to world simulator. Database updated but command not sent.");
             }
         } catch (IOException e) {
             logger.error("Failed to send truck to pickup: {}", e.getMessage(), e);
         }
     }
     
+    /**
+     * Send a truck to deliver a package
+     * @param truckId The ID of the truck
+     * @param packageId The ID of the package
+     * @param destination The destination location
+     */
     @Transactional
     public void sendTruckToDeliver(int truckId, long packageId, Location destination) {
         try {
-            // Update package and truck status in database
+            // Find the truck and package
             Optional<Truck> truckOpt = truckRepository.findById(truckId);
             Optional<Package> packageOpt = packageRepository.findById(packageId);
             
-            if (truckOpt.isPresent() && packageOpt.isPresent()) {
-                Truck truck = truckOpt.get();
-                Package pkg = packageOpt.get();
-                
-                // Update truck status
-                truck.setStatus(TruckStatus.DELIVERING);
-                truckRepository.save(truck);
-                
-                // Update package status and destination
-                pkg.setStatus(PackageStatus.DELIVERING);
-                pkg.setDestinationX(destination.getX());
-                pkg.setDestinationY(destination.getY());
-                pkg.setTruck(truck);
-                packageRepository.save(pkg);
-                
-                // Send command to world simulator if connected
-                if (worldConnector != null && worldConnector.isConnected()) {
-                    worldConnector.deliver(truckId, packageId, destination, worldConnector.getNextSeqNum());
-                    logger.info("Sent truck {} to deliver package {} to ({},{})", 
-                            truckId, packageId, destination.getX(), destination.getY());
-                } else {
-                    logger.warn("Not connected to world simulator. Database updated but command not sent.");
-                }
-            } else {
-                if (!truckOpt.isPresent()) {
+            if (truckOpt.isEmpty() || packageOpt.isEmpty()) {
+                if (truckOpt.isEmpty()) {
                     logger.error("Truck with ID {} not found", truckId);
                 }
-                if (!packageOpt.isPresent()) {
+                if (packageOpt.isEmpty()) {
                     logger.error("Package with ID {} not found", packageId);
                 }
+                return;
+            }
+            
+            Truck truck = truckOpt.get();
+            Package pkg = packageOpt.get();
+            
+            // Update truck status
+            truck.setStatus(TruckStatus.DELIVERING);
+            truckRepository.save(truck);
+            
+            // Update package status and destination
+            pkg.setStatus(PackageStatus.DELIVERING);
+            pkg.setDestinationX(destination.getX());
+            pkg.setDestinationY(destination.getY());
+            pkg.setTruck(truck);
+            packageRepository.save(pkg);
+            
+            // Send command to world simulator
+            if (worldConnector != null && worldConnector.isConnected()) {
+                worldConnector.deliver(truckId, packageId, destination);
+                logger.info("Sent truck {} to deliver package {} to ({},{})", 
+                        truckId, packageId, destination.getX(), destination.getY());
+            } else {
+                logger.warn("Not connected to world simulator. Database updated but command not sent.");
             }
         } catch (IOException e) {
             logger.error("Failed to send truck to deliver: {}", e.getMessage(), e);
         }
     }
     
-    @Transactional
+    /**
+     * Query the status of a truck
+     * @param truckId The ID of the truck
+     */
     public void queryTruckStatus(int truckId) {
         try {
+            // Find the truck
             Optional<Truck> truckOpt = truckRepository.findById(truckId);
-            if (truckOpt.isPresent()) {
-                if (worldConnector != null && worldConnector.isConnected()) {
-                    worldConnector.query(truckId, worldConnector.getNextSeqNum());
-                    logger.info("Queried status for truck {}", truckId);
-                } else {
-                    logger.warn("Not connected to world simulator. Query command not sent.");
-                }
-            } else {
+            if (truckOpt.isEmpty()) {
                 logger.error("Truck with ID {} not found", truckId);
+                return;
+            }
+            
+            // Send command to world simulator
+            if (worldConnector != null && worldConnector.isConnected()) {
+                worldConnector.queryTruckStatus(truckId);
+                logger.info("Queried status for truck {}", truckId);
+            } else {
+                logger.warn("Not connected to world simulator. Query command not sent.");
             }
         } catch (IOException e) {
             logger.error("Failed to query truck status: {}", e.getMessage(), e);
         }
     }
     
-    // Periodically check truck statuses
+    /**
+     * Periodically check the status of all active trucks
+     */
     @Scheduled(fixedRate = 60000) // Check every minute
     public void checkTruckStatuses() {
+        if (!worldConnector.isConnected()) {
+            return;
+        }
+        
+        // Find all trucks that are not idle
         List<Truck> activeTrucks = truckRepository.findByStatusNot(TruckStatus.IDLE);
+        
         for (Truck truck : activeTrucks) {
             try {
                 queryTruckStatus(truck.getId());
@@ -228,18 +285,20 @@ public class Ups {
         }
     }
     
-    // Method for other services to get the world ID
+    /**
+     * Get the world ID
+     * @return The world ID
+     */
     public Long getWorldId() {
-        return (worldConnector != null && worldConnector.isConnected()) ? worldConnector.getWorldId() : null;
+        return worldConnector != null && worldConnector.isConnected() ? worldConnector.getWorldId() : null;
     }
     
-    // Helper method to check if running in test environment
+    /**
+     * Check if running in test environment
+     * @return true if in test environment, false otherwise
+     */
     private boolean isTestEnvironment() {
-        for (String profile : System.getProperty("spring.profiles.active", "").split(",")) {
-            if (profile.trim().equals("test") || profile.trim().equals("test-cli")) {
-                return true;
-            }
-        }
-        return false;
+        String activeProfiles = System.getProperty("spring.profiles.active", "");
+        return activeProfiles.contains("test");
     }
 }

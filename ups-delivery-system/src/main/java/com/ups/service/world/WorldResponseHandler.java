@@ -20,7 +20,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.stream.Collectors;
 
+/**
+ * Handles responses from the World Simulator
+ */
 @Service
 public class WorldResponseHandler {
     private static final Logger logger = LoggerFactory.getLogger(WorldResponseHandler.class);
@@ -48,6 +52,11 @@ public class WorldResponseHandler {
      * Adds a response to the processing queue
      */
     public void queueResponse(WorldUpsProto.UResponses response) {
+        if (response == null) {
+            logger.warn("Attempted to queue null response");
+            return;
+        }
+        
         try {
             responseQueue.put(response);
             logger.debug("Queued response for processing");
@@ -87,12 +96,12 @@ public class WorldResponseHandler {
         // Process acknowledgements first
         processAcknowledgements(response);
         
-        // Process completions
+        // Process completions (truck arrivals, etc.)
         for (WorldUpsProto.UFinished completion : response.getCompletionsList()) {
             processCompletion(completion);
         }
         
-        // Process deliveries
+        // Process deliveries (package deliveries)
         for (WorldUpsProto.UDeliveryMade delivery : response.getDeliveredList()) {
             processDelivery(delivery);
         }
@@ -107,11 +116,10 @@ public class WorldResponseHandler {
             processError(error);
         }
         
-        // Handle finished flag
+        // Handle finished flag (simulation termination)
         if (response.hasFinished() && response.getFinished()) {
             logger.info("World simulation finished");
-            notifySimulationFinished();
-            stop();
+            handleSimulationFinished();
         }
     }
     
@@ -121,8 +129,7 @@ public class WorldResponseHandler {
     private void processAcknowledgements(WorldUpsProto.UResponses response) {
         if (response.getAcksCount() > 0) {
             logger.debug("Received {} acknowledgements", response.getAcksCount());
-            
-            // TODO: Update the status of acknowledged messages
+            // Track acknowledgments if needed
         }
     }
     
@@ -137,6 +144,8 @@ public class WorldResponseHandler {
         Optional<Truck> truckOpt = truckRepository.findById(completion.getTruckid());
         if (truckOpt.isPresent()) {
             Truck truck = truckOpt.get();
+            
+            // Update truck location
             truck.setX(completion.getX());
             truck.setY(completion.getY());
             
@@ -146,38 +155,15 @@ public class WorldResponseHandler {
                     truck.setStatus(TruckStatus.ARRIVE_WAREHOUSE);
                     truckRepository.save(truck);
                     
-                    // Find packages assigned to this truck
-                    List<Package> packages = packageRepository.findByTruckAndStatus(truck, PackageStatus.ASSIGNED);
-                    if (!packages.isEmpty()) {
-                        // Find the warehouse
-                        Optional<Warehouse> warehouseOpt = findNearestWarehouse(completion.getX(), completion.getY());
-                        if (warehouseOpt.isPresent()) {
-                            Warehouse warehouse = warehouseOpt.get();
-                            
-                            // Notify Amazon for each package and update package status
-                            for (Package pkg : packages) {
-                                // Send notification to Amazon
-                                amazonNotificationService.notifyTruckArrival(pkg, truck, warehouse);
-                                
-                                // Update package status
-                                pkg.setStatus(PackageStatus.PICKUP_READY);
-                                packageRepository.save(pkg);
-                                
-                                logger.info("Notified Amazon about truck {} arrival at warehouse {} for package {}", 
-                                        truck.getId(), warehouse.getId(), pkg.getId());
-                            }
-                        } else {
-                            logger.error("Could not find warehouse near coordinates ({},{})", 
-                                    completion.getX(), completion.getY());
-                        }
-                    }
+                    // Notify Amazon that the truck has arrived for packages assigned to this truck
+                    processArrivalAtWarehouse(truck, completion);
                     break;
                     
                 case "idle":
                     truck.setStatus(TruckStatus.IDLE);
                     truckRepository.save(truck);
                     break;
-                    
+                
                 default:
                     logger.warn("Unknown completion status: {}", completion.getStatus());
                     break;
@@ -186,6 +172,42 @@ public class WorldResponseHandler {
             logger.info("Updated truck {} status to {}", truck.getId(), truck.getStatus());
         } else {
             logger.error("Truck {} not found for completion update", completion.getTruckid());
+        }
+    }
+    
+    /**
+     * Process truck arrival at warehouse
+     */
+    private void processArrivalAtWarehouse(Truck truck, WorldUpsProto.UFinished completion) {
+        // Find packages assigned to this truck
+        List<Package> packages = packageRepository.findByTruckAndStatus(truck, PackageStatus.ASSIGNED);
+        if (packages.isEmpty()) {
+            logger.info("No packages assigned to truck {} at warehouse", truck.getId());
+            return;
+        }
+        
+        // Find the warehouse at current location
+        Optional<Warehouse> warehouseOpt = findNearestWarehouse(completion.getX(), completion.getY());
+        if (warehouseOpt.isPresent()) {
+            Warehouse warehouse = warehouseOpt.get();
+            
+            // Notify Amazon for each package
+            for (Package pkg : packages) {
+                // Update package status
+                pkg.setStatus(PackageStatus.PICKUP_READY);
+                packageRepository.save(pkg);
+                
+                // Send notification to Amazon
+                try {
+                    amazonNotificationService.notifyTruckArrival(pkg, truck, warehouse);
+                    logger.info("Notified Amazon about truck {} arrival at warehouse {} for package {}", 
+                            truck.getId(), warehouse.getId(), pkg.getId());
+                } catch (Exception e) {
+                    logger.error("Failed to notify Amazon about truck arrival", e);
+                }
+            }
+        } else {
+            logger.error("Could not find warehouse near location ({},{})", completion.getX(), completion.getY());
         }
     }
     
@@ -204,19 +226,19 @@ public class WorldResponseHandler {
             Package pkg = packageOpt.get();
             Truck truck = truckOpt.get();
             
-            // Mark the package as delivered
+            // Update package status to delivered
             pkg.setStatus(PackageStatus.DELIVERED);
             packageRepository.save(pkg);
-            logger.info("Marked package {} as delivered", pkg.getId());
             
-            // Notify Amazon about successful delivery
-            amazonNotificationService.notifyDeliveryComplete(pkg, truck);
-            
-            // Send a status update about the delivery
-            amazonNotificationService.sendStatusUpdate(pkg, truck, "DELIVERED", 
-                    "Package " + pkg.getId() + " delivered successfully");
-            
-            logger.info("Notified Amazon about delivery of package {}", pkg.getId());
+            // Notify Amazon about delivery completion
+            try {
+                amazonNotificationService.notifyDeliveryComplete(pkg, truck);
+                amazonNotificationService.sendStatusUpdate(pkg, truck, "DELIVERED", 
+                        "Package " + pkg.getId() + " delivered successfully");
+                logger.info("Notified Amazon about delivery completion for package {}", pkg.getId());
+            } catch (Exception e) {
+                logger.error("Failed to notify Amazon about delivery completion", e);
+            }
         } else {
             if (!packageOpt.isPresent()) {
                 logger.error("Package {} not found for delivery update", delivery.getPackageid());
@@ -243,44 +265,12 @@ public class WorldResponseHandler {
             
             // Map world status to our TruckStatus enum
             TruckStatus oldStatus = truck.getStatus();
-            TruckStatus newStatus = oldStatus;
+            TruckStatus newStatus = mapWorldStatusToTruckStatus(truckStatus.getStatus());
             
-            switch (truckStatus.getStatus().toLowerCase()) {
-                case "idle":
-                    newStatus = TruckStatus.IDLE;
-                    break;
-                case "traveling":
-                    newStatus = TruckStatus.TRAVELING;
-                    break;
-                case "arrive warehouse":
-                    newStatus = TruckStatus.ARRIVE_WAREHOUSE;
-                    break;
-                case "loading":
-                    newStatus = TruckStatus.LOADING;
-                    break;
-                case "delivering":
-                    newStatus = TruckStatus.DELIVERING;
-                    break;
-                default:
-                    logger.warn("Unknown truck status: {}", truckStatus.getStatus());
-                    break;
-            }
-            
-            // If status has changed, update Amazon
+            // If status has changed, update packages and notify Amazon
             if (oldStatus != newStatus) {
                 truck.setStatus(newStatus);
-                
-                // Find packages associated with this truck and update Amazon
-                List<Package> packages = packageRepository.findByTruck(truck);
-                for (Package pkg : packages) {
-                    // Update package status based on truck status
-                    updatePackageStatus(pkg, newStatus);
-                    
-                    // Send status update to Amazon
-                    amazonNotificationService.sendStatusUpdate(pkg, truck, 
-                            newStatus.toString(), 
-                            "Truck " + truck.getId() + " status changed to " + newStatus);
-                }
+                updatePackagesForTruckStatusChange(truck, oldStatus, newStatus);
             }
             
             truckRepository.save(truck);
@@ -290,46 +280,73 @@ public class WorldResponseHandler {
     }
     
     /**
-     * Update package status based on truck status
+     * Map world status string to our TruckStatus enum
      */
-    private void updatePackageStatus(Package pkg, TruckStatus truckStatus) {
-        PackageStatus oldStatus = pkg.getStatus();
-        PackageStatus newStatus = oldStatus;
+    private TruckStatus mapWorldStatusToTruckStatus(String worldStatus) {
+        switch (worldStatus.toLowerCase()) {
+            case "idle":
+                return TruckStatus.IDLE;
+            case "traveling":
+                return TruckStatus.TRAVELING;
+            case "arrive warehouse":
+                return TruckStatus.ARRIVE_WAREHOUSE;
+            case "loading":
+                return TruckStatus.LOADING;
+            case "delivering":
+                return TruckStatus.DELIVERING;
+            default:
+                logger.warn("Unknown world status: {}, defaulting to IDLE", worldStatus);
+                return TruckStatus.IDLE;
+        }
+    }
+    
+    /**
+     * Update packages associated with a truck when truck status changes
+     */
+    private void updatePackagesForTruckStatusChange(Truck truck, TruckStatus oldStatus, TruckStatus newStatus) {
+        List<Package> packages = packageRepository.findByTruck(truck);
         
-        // Update package status based on truck status
+        for (Package pkg : packages) {
+            // Update package status based on truck status
+            PackageStatus oldPackageStatus = pkg.getStatus();
+            PackageStatus newPackageStatus = determinePackageStatus(pkg.getStatus(), newStatus);
+            
+            if (oldPackageStatus != newPackageStatus) {
+                pkg.setStatus(newPackageStatus);
+                packageRepository.save(pkg);
+                logger.info("Updated package {} status from {} to {}", 
+                        pkg.getId(), oldPackageStatus, newPackageStatus);
+            }
+            
+            // Notify Amazon about status update
+            try {
+                amazonNotificationService.sendStatusUpdate(pkg, truck, 
+                        newStatus.toString(), 
+                        "Truck " + truck.getId() + " status changed to " + newStatus);
+            } catch (Exception e) {
+                logger.error("Failed to send status update to Amazon", e);
+            }
+        }
+    }
+    
+    /**
+     * Determine package status based on truck status
+     */
+    private PackageStatus determinePackageStatus(PackageStatus currentStatus, TruckStatus truckStatus) {
         switch (truckStatus) {
             case LOADING:
-                if (oldStatus == PackageStatus.PICKUP_READY) {
-                    newStatus = PackageStatus.LOADING;
-                }
-                break;
+                return PackageStatus.LOADING;
             case DELIVERING:
-                if (oldStatus == PackageStatus.LOADING || oldStatus == PackageStatus.LOADED) {
-                    newStatus = PackageStatus.DELIVERING;
-                }
-                break;
+                return PackageStatus.DELIVERING;
             case IDLE:
-                // If truck is idle and package was being delivered, it might be delivered
-                if (oldStatus == PackageStatus.DELIVERING) {
-                    // Check if we're at delivery destination
-                    Truck truck = pkg.getTruck();
-                    if (truck != null && 
-                            truck.getX() == pkg.getDestinationX() && 
-                            truck.getY() == pkg.getDestinationY()) {
-                        newStatus = PackageStatus.DELIVERED;
-                    }
+                // If truck is idle after delivering, the package might be delivered
+                if (currentStatus == PackageStatus.DELIVERING) {
+                    return PackageStatus.DELIVERED;
                 }
-                break;
+                // Otherwise, keep current status
+                return currentStatus;
             default:
-                break;
-        }
-        
-        // Update if status changed
-        if (oldStatus != newStatus) {
-            pkg.setStatus(newStatus);
-            packageRepository.save(pkg);
-            logger.info("Updated package {} status from {} to {}", 
-                    pkg.getId(), oldStatus, newStatus);
+                return currentStatus;
         }
     }
     
@@ -340,32 +357,60 @@ public class WorldResponseHandler {
     private void processError(WorldUpsProto.UErr error) {
         logger.error("World error for sequence {}: {}", error.getOriginseqnum(), error.getErr());
         
-        // Notify packages that might be affected by this error
-        List<Package> packages = packageRepository.findAll();
-        for (Package pkg : packages) {
-            // Only notify for packages that are in transit or being processed
-            if (pkg.getStatus() == PackageStatus.ASSIGNED || 
-                pkg.getStatus() == PackageStatus.DELIVERING || 
-                pkg.getStatus() == PackageStatus.LOADING) {
-                
-                // Get the truck if available
-                Truck truck = pkg.getTruck();
-                
-                // Send status update with error information
+        // Find all packages that might be affected and notify Amazon
+        List<Package> activePackages = packageRepository.findAll().stream()
+                .filter(pkg -> pkg.getStatus() != PackageStatus.DELIVERED && pkg.getStatus() != PackageStatus.FAILED)
+                .collect(Collectors.toList());
+        
+        for (Package pkg : activePackages) {
+            try {
                 amazonNotificationService.sendStatusUpdate(
                     pkg, 
-                    truck, 
+                    pkg.getTruck(), 
                     "ERROR", 
                     "Operation error: " + error.getErr() + " (seq: " + error.getOriginseqnum() + ")"
                 );
-                
-                logger.info("Sent error notification to Amazon for package {}", pkg.getId());
+            } catch (Exception e) {
+                logger.error("Failed to send error notification to Amazon", e);
             }
         }
     }
     
     /**
-     * Find the nearest warehouse to the given coordinates
+     * Handle the end of simulation
+     */
+    @Transactional
+    private void handleSimulationFinished() {
+        // Find all packages that are not in a terminal state
+        List<Package> activePackages = packageRepository.findAll().stream()
+                .filter(pkg -> pkg.getStatus() != PackageStatus.DELIVERED && pkg.getStatus() != PackageStatus.FAILED)
+                .collect(Collectors.toList());
+        
+        // Mark them as failed and notify Amazon
+        for (Package pkg : activePackages) {
+            pkg.setStatus(PackageStatus.FAILED);
+            packageRepository.save(pkg);
+            
+            try {
+                amazonNotificationService.sendStatusUpdate(
+                    pkg,
+                    pkg.getTruck(),
+                    "FAILED",
+                    "Delivery failed: world simulation ended"
+                );
+            } catch (Exception e) {
+                logger.error("Failed to send simulation end notification to Amazon", e);
+            }
+        }
+        
+        logger.info("Processed {} undelivered packages due to simulation end", activePackages.size());
+        
+        // Stop the response handler
+        stop();
+    }
+    
+    /**
+     * Find the nearest warehouse to a location
      */
     private Optional<Warehouse> findNearestWarehouse(int x, int y) {
         List<Warehouse> warehouses = warehouseRepository.findAll();
@@ -378,15 +423,15 @@ public class WorldResponseHandler {
         
         for (int i = 1; i < warehouses.size(); i++) {
             Warehouse warehouse = warehouses.get(i);
-            int d = distance(x, y, warehouse.getX(), warehouse.getY());
-            if (d < minDistance) {
-                minDistance = d;
+            int dist = distance(x, y, warehouse.getX(), warehouse.getY());
+            if (dist < minDistance) {
+                minDistance = dist;
                 nearest = warehouse;
             }
         }
         
-        // Consider only warehouses that are very close (threshold of 10 units)
-        if (minDistance <= 10) {
+        // Only return if warehouse is close enough (within 5 units)
+        if (minDistance <= 5) {
             return Optional.of(nearest);
         }
         
@@ -398,38 +443,6 @@ public class WorldResponseHandler {
      */
     private int distance(int x1, int y1, int x2, int y2) {
         return (int) Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-    }
-    
-    /**
-     * Notify Amazon that the simulation has finished and handle any incomplete deliveries
-     */
-    @Transactional
-    private void notifySimulationFinished() {
-        // Find all packages that are not in terminal state
-        List<Package> incompletePackages = packageRepository.findAll().stream()
-                .filter(pkg -> pkg.getStatus() != PackageStatus.DELIVERED && pkg.getStatus() != PackageStatus.FAILED)
-                .toList();
-        
-        for (Package pkg : incompletePackages) {
-            // Mark the package as failed
-            pkg.setStatus(PackageStatus.FAILED);
-            packageRepository.save(pkg);
-            
-            // Get the truck if available
-            Truck truck = pkg.getTruck();
-            
-            // Notify Amazon
-            amazonNotificationService.sendStatusUpdate(
-                pkg,
-                truck,
-                "FAILED",
-                "Delivery failed because simulation ended before completion"
-            );
-            
-            logger.info("Marked package {} as FAILED due to simulation end", pkg.getId());
-        }
-        
-        logger.info("Processed {} incomplete packages at simulation end", incompletePackages.size());
     }
     
     /**

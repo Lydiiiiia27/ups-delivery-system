@@ -12,6 +12,9 @@ import java.io.InputStream;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Listens for responses from the World Simulator and forwards them to the WorldResponseHandler
+ */
 @Service
 public class WorldResponseListener {
     private static final Logger logger = LoggerFactory.getLogger(WorldResponseListener.class);
@@ -28,8 +31,14 @@ public class WorldResponseListener {
     
     /**
      * Starts the listener thread that continuously receives responses from the World Simulator
+     * @param socket The socket connected to the World Simulator
      */
     public void startListening(Socket socket) {
+        if (socket == null || socket.isClosed()) {
+            logger.error("Cannot start listening on null or closed socket");
+            return;
+        }
+        
         if (running.compareAndSet(false, true)) {
             this.socket = socket;
             listenerThread = new Thread(this::listenForResponses, "WorldResponseListener");
@@ -45,21 +54,30 @@ public class WorldResponseListener {
      * Stops the listener thread
      */
     public void stopListening() {
-        running.set(false);
-        if (listenerThread != null) {
-            listenerThread.interrupt();
-            try {
-                listenerThread.join(5000); // Wait up to 5 seconds for thread to stop
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                logger.warn("Interrupted while waiting for listener thread to stop");
+        if (running.compareAndSet(true, false)) {
+            logger.info("Stopping World Response Listener");
+            
+            if (listenerThread != null) {
+                listenerThread.interrupt();
+                try {
+                    listenerThread.join(5000); // Wait up to 5 seconds for thread to stop
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    logger.warn("Interrupted while waiting for listener thread to stop");
+                }
+                listenerThread = null;
             }
+        } else {
+            logger.info("Listener is not running");
         }
-        logger.info("Stopped World Response Listener thread");
     }
     
+    /**
+     * Main loop for listening to responses from the World Simulator
+     */
     private void listenForResponses() {
         logger.info("World Response Listener thread started");
+        
         while (running.get() && !Thread.currentThread().isInterrupted()) {
             try {
                 WorldUpsProto.UResponses response = receiveResponse();
@@ -69,7 +87,7 @@ public class WorldResponseListener {
                 }
             } catch (IOException e) {
                 if (running.get()) {
-                    logger.error("Error receiving response from World Simulator", e);
+                    logger.error("Error receiving response from World Simulator: {}", e.getMessage());
                     // Attempt to reconnect or handle error
                     try {
                         Thread.sleep(1000); // Wait before retrying
@@ -79,16 +97,27 @@ public class WorldResponseListener {
                     }
                 }
             } catch (Exception e) {
-                logger.error("Unexpected error in listener thread", e);
+                logger.error("Unexpected error in listener thread: {}", e.getMessage(), e);
+                try {
+                    Thread.sleep(1000); // Wait before retrying
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }
+        
         logger.info("World Response Listener thread stopping");
     }
     
+    /**
+     * Receives a response from the World Simulator
+     * @return The UResponses message received from the World Simulator
+     * @throws IOException If an error occurs while reading from the socket
+     */
     private WorldUpsProto.UResponses receiveResponse() throws IOException {
         if (socket == null || socket.isClosed() || !socket.isConnected()) {
-            logger.error("Socket is not connected");
-            return null;
+            throw new IOException("Socket is not connected");
         }
         
         try {
@@ -97,15 +126,20 @@ public class WorldResponseListener {
             
             // Read the message size
             int size = codedIn.readRawVarint32();
+            if (size <= 0) {
+                logger.warn("Received invalid message size: {}", size);
+                return null;
+            }
             
             // Read the message
             int oldLimit = codedIn.pushLimit(size);
             WorldUpsProto.UResponses response = WorldUpsProto.UResponses.parseFrom(codedIn);
             codedIn.popLimit(oldLimit);
             
+            logger.debug("Received message of size {} bytes", size);
             return response;
         } catch (IOException e) {
-            logger.error("Error reading response from socket", e);
+            logger.error("Error reading response from socket: {}", e.getMessage());
             throw e;
         }
     }

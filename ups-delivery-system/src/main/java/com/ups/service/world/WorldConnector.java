@@ -2,6 +2,7 @@ package com.ups.service.world;
 
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
+import com.ups.WorldUpsProto;
 import com.ups.model.Location;
 import com.ups.model.entity.Truck;
 import org.slf4j.Logger;
@@ -9,19 +10,20 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.ups.WorldUpsProto;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * Handles connection to the World Simulator and sending commands
+ */
 @Component
 public class WorldConnector {
     private static final Logger logger = LoggerFactory.getLogger(WorldConnector.class);
+    
     private Socket socket;
     private AtomicLong seqNum = new AtomicLong(1);
     private Long worldId;
@@ -36,134 +38,212 @@ public class WorldConnector {
     public WorldConnector(WorldResponseListener responseListener) {
         this.responseListener = responseListener;
     }
-
-    public WorldConnector(String host, int port, List<Truck> trucks, WorldResponseListener listener) throws IOException {
-        this.responseListener = listener;
+    
+    /**
+     * Connect to the World Simulator
+     * @param host The host of the World Simulator
+     * @param port The port of the World Simulator
+     * @param trucks The list of trucks to initialize in the World Simulator
+     * @param newWorld Whether to create a new world or connect to an existing one
+     * @param existingWorldId The ID of the existing world to connect to (if newWorld is false)
+     * @throws IOException If an error occurs during connection
+     */
+    public void connect(String host, int port, List<Truck> trucks, boolean newWorld, Long existingWorldId) throws IOException {
         try {
             this.socket = new Socket(host, port);
-            connect(1, false, trucks);
-            // Start the response listener after successful connection
+            
+            if (newWorld) {
+                // Create a new world
+                connectToWorld(null, trucks);
+            } else {
+                // Connect to existing world
+                connectToWorld(existingWorldId, trucks);
+            }
+            
+            // Start the response listener
             if (responseListener != null) {
                 responseListener.startListening(socket);
             }
-        } catch (IllegalArgumentException e) {
-            this.socket = new Socket(host, port);
-            connect(1, true, trucks);
-            if (responseListener != null) {
-                responseListener.startListening(socket);
-            }
+            
+        } catch (IOException e) {
+            logger.error("Failed to connect to World Simulator at {}:{}: {}", host, port, e.getMessage());
+            throw e;
         }
     }
-
-    private void connect(int worldId, boolean newWorld, List<Truck> trucks) throws IOException {
-        // === 1. Create UConnect request ===
+    
+    /**
+     * Connect to the World Simulator
+     * @param worldId The ID of the world to connect to (null to create a new world)
+     * @param trucks The list of trucks to initialize in the World Simulator
+     * @throws IOException If an error occurs during connection
+     */
+    private void connectToWorld(Long worldId, List<Truck> trucks) throws IOException {
+        // Create UConnect request
         WorldUpsProto.UConnect.Builder connectBuilder = WorldUpsProto.UConnect.newBuilder();
-        if (!newWorld) {
+        
+        if (worldId != null) {
             connectBuilder.setWorldid(worldId);
         }
-        if (trucks != null && trucks.size() > 0) {
-            WorldUpsProto.UInitTruck.Builder truckBuilder = WorldUpsProto.UInitTruck.newBuilder();
+        
+        // Add trucks to the request
+        if (trucks != null && !trucks.isEmpty()) {
             for (Truck truck : trucks) {
-                truckBuilder.setId(truck.getId());
-                truckBuilder.setX(truck.getX());
-                truckBuilder.setY(truck.getY());
-                WorldUpsProto.UInitTruck truckRequest = truckBuilder.build();
+                WorldUpsProto.UInitTruck truckRequest = WorldUpsProto.UInitTruck.newBuilder()
+                        .setId(truck.getId())
+                        .setX(truck.getX())
+                        .setY(truck.getY())
+                        .build();
                 connectBuilder.addTrucks(truckRequest);
             }
         }
-        connectBuilder.setIsAmazon(false); // false means UPS
+        
+        // Set isAmazon to false (we are UPS)
+        connectBuilder.setIsAmazon(false);
+        
+        // Build and send the request
         WorldUpsProto.UConnect connectRequest = connectBuilder.build();
         sendMessage(connectRequest);
-
-        // === 2. Receive UConnected response ===
+        
+        // Receive the response
         WorldUpsProto.UConnected connectedResponse = receiveMessage(WorldUpsProto.UConnected.parser());
+        
+        // Check if connection was successful
         String connectionResult = connectedResponse.getResult();
-        if (connectionResult.equals("connected!")) {
-            logger.info("Successfully connected to world simulator: {}", connectionResult);
+        if ("connected!".equals(connectionResult)) {
             this.worldId = connectedResponse.getWorldid();
+            
+            if (worldId == null) {
+                logger.info("Successfully created new world with ID: {}", this.worldId);
+            } else {
+                logger.info("Successfully connected to existing world with ID: {}", this.worldId);
+            }
         } else {
-            logger.error("Failed to connect to world simulator: {}", connectionResult);
-            throw new IllegalArgumentException(connectionResult);
-        }
-        if (newWorld) {
-            logger.info("Created new world with ID: {}", this.worldId);
-        } else {
-            logger.info("Connected to existing world with ID: {}", this.worldId);
+            logger.error("Failed to connect to World Simulator: {}", connectionResult);
+            throw new IOException("Failed to connect to World Simulator: " + connectionResult);
         }
     }
-
+    
+    /**
+     * Get the world ID
+     * @return The world ID
+     */
     public Long getWorldId() {
         return worldId;
     }
-
-    public void deliver(int truckId, long packageId, Location location, long seqNum) throws IOException {
-        // === 1. Create UGoDeliver request ===
+    
+    /**
+     * Send a truck to deliver a package
+     * @param truckId The ID of the truck
+     * @param packageId The ID of the package
+     * @param location The destination location
+     * @throws IOException If an error occurs while sending the command
+     */
+    public void deliver(int truckId, long packageId, Location location) throws IOException {
+        // Get the next sequence number
+        long sequenceNumber = seqNum.getAndIncrement();
+        
+        // Create UGoDeliver request
         WorldUpsProto.UGoDeliver.Builder deliverBuilder = WorldUpsProto.UGoDeliver.newBuilder();
         deliverBuilder.setTruckid(truckId);
-        WorldUpsProto.UDeliveryLocation.Builder deliveryLocationBuilder = WorldUpsProto.UDeliveryLocation.newBuilder();
-        deliveryLocationBuilder.setPackageid(packageId);
-        deliveryLocationBuilder.setX(location.getX());
-        deliveryLocationBuilder.setY(location.getY());
-        WorldUpsProto.UDeliveryLocation deliveryLocation = deliveryLocationBuilder.build();
-        deliverBuilder.addPackages(deliveryLocation);
-        deliverBuilder.setSeqnum(seqNum);
-        WorldUpsProto.UGoDeliver deliverRequest = deliverBuilder.build();
-
-        // === 2. Create UCommands request ===
+        
+        // Create UDeliveryLocation
+        WorldUpsProto.UDeliveryLocation.Builder locationBuilder = WorldUpsProto.UDeliveryLocation.newBuilder();
+        locationBuilder.setPackageid(packageId);
+        locationBuilder.setX(location.getX());
+        locationBuilder.setY(location.getY());
+        
+        // Add the delivery location to the request
+        deliverBuilder.addPackages(locationBuilder.build());
+        deliverBuilder.setSeqnum(sequenceNumber);
+        
+        // Create UCommands request
         WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
-        commandsBuilder.addDeliveries(deliverRequest);
-        WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
-
-        // Send command without waiting for response (response will be handled by listener)
-        sendMessage(commandsRequest);
+        commandsBuilder.addDeliveries(deliverBuilder.build());
+        
+        // Send the request
+        WorldUpsProto.UCommands command = commandsBuilder.build();
+        sendMessage(command);
+        
+        logger.info("Sent delivery command for truck {} to deliver package {} to ({},{})",
+                truckId, packageId, location.getX(), location.getY());
     }
-
-    public void pickup(int truckId, int warehouseId, long seqNum) throws IOException {
-        // === 1. Create UGoPickup request ===
+    
+    /**
+     * Send a truck to pick up a package from a warehouse
+     * @param truckId The ID of the truck
+     * @param warehouseId The ID of the warehouse
+     * @throws IOException If an error occurs while sending the command
+     */
+    public void pickup(int truckId, int warehouseId) throws IOException {
+        // Get the next sequence number
+        long sequenceNumber = seqNum.getAndIncrement();
+        
+        // Create UGoPickup request
         WorldUpsProto.UGoPickup.Builder pickupBuilder = WorldUpsProto.UGoPickup.newBuilder();
         pickupBuilder.setTruckid(truckId);
         pickupBuilder.setWhid(warehouseId);
-        pickupBuilder.setSeqnum(seqNum);
-        WorldUpsProto.UGoPickup pickupRequest = pickupBuilder.build();
-
-        // === 2. Create UCommands request ===
+        pickupBuilder.setSeqnum(sequenceNumber);
+        
+        // Create UCommands request
         WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
-        commandsBuilder.addPickups(pickupRequest);
-        WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
-
-        // Send command without waiting for response (response will be handled by listener)
-        sendMessage(commandsRequest);
+        commandsBuilder.addPickups(pickupBuilder.build());
+        
+        // Send the request
+        WorldUpsProto.UCommands command = commandsBuilder.build();
+        sendMessage(command);
+        
+        logger.info("Sent pickup command for truck {} to warehouse {}", truckId, warehouseId);
     }
     
-    public void query(int truckId, long seqNum) throws IOException {
-        // === 1. Create UQuery request ===
+    /**
+     * Query the status of a truck
+     * @param truckId The ID of the truck
+     * @throws IOException If an error occurs while sending the command
+     */
+    public void queryTruckStatus(int truckId) throws IOException {
+        // Get the next sequence number
+        long sequenceNumber = seqNum.getAndIncrement();
+        
+        // Create UQuery request
         WorldUpsProto.UQuery.Builder queryBuilder = WorldUpsProto.UQuery.newBuilder();
         queryBuilder.setTruckid(truckId);
-        queryBuilder.setSeqnum(seqNum);
-        WorldUpsProto.UQuery queryRequest = queryBuilder.build();
-
-        // === 2. Create UCommands request ===
-        WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
-        commandsBuilder.addQueries(queryRequest);
-        WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
-
-        // Send command without waiting for response (response will be handled by listener)
-        sendMessage(commandsRequest);
-    }
-
-    public void setSimulationSpeed(int speed) throws IOException {
-        WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
-        commandsBuilder.setSimspeed(speed);
-        WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
+        queryBuilder.setSeqnum(sequenceNumber);
         
-        // Send command without waiting for response (response will be handled by listener)
-        sendMessage(commandsRequest);
-        logger.info("Simulation speed set to: {}", speed);
+        // Create UCommands request
+        WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
+        commandsBuilder.addQueries(queryBuilder.build());
+        
+        // Send the request
+        WorldUpsProto.UCommands command = commandsBuilder.build();
+        sendMessage(command);
+        
+        logger.info("Sent query command for truck {}", truckId);
     }
     
+    /**
+     * Set the simulation speed
+     * @param speed The simulation speed (higher numbers make things happen more quickly)
+     * @throws IOException If an error occurs while sending the command
+     */
+    public void setSimulationSpeed(int speed) throws IOException {
+        // Create UCommands request
+        WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
+        commandsBuilder.setSimspeed(speed);
+        
+        // Send the request
+        WorldUpsProto.UCommands command = commandsBuilder.build();
+        sendMessage(command);
+        
+        logger.info("Set simulation speed to {}", speed);
+    }
+    
+    /**
+     * Disconnect from the World Simulator
+     * @throws IOException If an error occurs while sending the command
+     */
     public void disconnect() throws IOException {
         if (socket == null || socket.isClosed()) {
-            logger.info("Already disconnected from world simulator");
+            logger.info("Already disconnected from World Simulator");
             return;
         }
         
@@ -173,17 +253,17 @@ public class WorldConnector {
                 responseListener.stopListening();
             }
             
-            // Send disconnect command
+            // Create UCommands request with disconnect flag
             WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
             commandsBuilder.setDisconnect(true);
-            WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
             
-            // Send the disconnect command
-            sendMessage(commandsRequest);
+            // Send the request
+            WorldUpsProto.UCommands command = commandsBuilder.build();
+            sendMessage(command);
             
-            logger.info("Sent disconnect command to world simulator for world ID: {}", worldId);
+            logger.info("Sent disconnect command to World Simulator for world ID: {}", worldId);
         } catch (Exception e) {
-            logger.warn("Error during disconnect from world simulator: {}", e.getMessage());
+            logger.warn("Error during disconnect from World Simulator: {}", e.getMessage());
         } finally {
             // Always close the socket
             try {
@@ -197,49 +277,79 @@ public class WorldConnector {
             
             // Reset state
             this.socket = null;
-            this.seqNum.set(1);
             this.worldId = null;
         }
     }
-
-    // Send a Protobuf message with length prefix
-    private <T extends com.google.protobuf.Message> void sendMessage(T msg) throws IOException {
+    
+    /**
+     * Check if the connector is connected to the World Simulator
+     * @return true if connected, false otherwise
+     */
+    public boolean isConnected() {
+        return socket != null && !socket.isClosed() && socket.isConnected();
+    }
+    
+    /**
+     * Get the next sequence number
+     * @return The next sequence number
+     */
+    public long getNextSeqNum() {
+        return seqNum.getAndIncrement();
+    }
+    
+    /**
+     * Send a Protobuf message with length prefix
+     * @param message The message to send
+     * @throws IOException If an error occurs while sending the message
+     */
+    private <T extends com.google.protobuf.Message> void sendMessage(T message) throws IOException {
         if (socket == null || socket.isClosed()) {
             throw new IOException("Socket is not connected");
         }
         
         OutputStream out = socket.getOutputStream();
-        byte[] data = msg.toByteArray();
+        byte[] data = message.toByteArray();
+        
+        // Create a CodedOutputStream to handle writing the message
         CodedOutputStream codedOut = CodedOutputStream.newInstance(out);
-        codedOut.writeUInt32NoTag(data.length);  // Varint32 length prefix
+        
+        // Write the message size as a Varint32
+        codedOut.writeUInt32NoTag(data.length);
+        
+        // Write the message data
         codedOut.writeRawBytes(data);
+        
+        // Flush the stream
         codedOut.flush();
         
-        logger.debug("Sent message of type {}, size: {} bytes", msg.getClass().getSimpleName(), data.length);
+        logger.debug("Sent message of type {}, size: {} bytes", message.getClass().getSimpleName(), data.length);
     }
-
-    // Receive a Protobuf message with length prefix
+    
+    /**
+     * Receive a Protobuf message with length prefix
+     * @param parser The parser for the message type
+     * @return The received message
+     * @throws IOException If an error occurs while receiving the message
+     */
     private <T extends com.google.protobuf.Message> T receiveMessage(com.google.protobuf.Parser<T> parser) throws IOException {
         if (socket == null || socket.isClosed()) {
             throw new IOException("Socket is not connected");
         }
         
         InputStream in = socket.getInputStream();
+        
+        // Create a CodedInputStream to handle reading the message
         CodedInputStream codedIn = CodedInputStream.newInstance(in);
+        
+        // Read the message size as a Varint32
         int size = codedIn.readRawVarint32();
+        
+        // Read the message data
         int oldLimit = codedIn.pushLimit(size);
-        T msg = parser.parseFrom(codedIn);
+        T message = parser.parseFrom(codedIn);
         codedIn.popLimit(oldLimit);
         
-        logger.debug("Received message of type {}, size: {} bytes", msg.getClass().getSimpleName(), size);
-        return msg;
-    }
-    
-    public boolean isConnected() {
-        return socket != null && !socket.isClosed() && socket.isConnected();
-    }
-    
-    public long getNextSeqNum() {
-        return seqNum.getAndIncrement();
+        logger.debug("Received message of type {}, size: {} bytes", message.getClass().getSimpleName(), size);
+        return message;
     }
 }

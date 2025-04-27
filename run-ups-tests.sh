@@ -5,7 +5,7 @@ echo "==========================================="
 
 # Function to check if World Simulator is running
 check_world_simulator() {
-    if docker ps | grep -q world-simulator_server_1; then
+    if docker ps | grep -q world-simulator; then
         echo "✓ World Simulator is running"
         return 0
     else
@@ -40,10 +40,10 @@ start_amazon_mock() {
     docker network ls
     
     # Start the Mockoon container with the data file mounted and proper networks
-    # Use both world-simulator_default and ups-network to ensure connectivity
+    # Use world-network to ensure connectivity with simulator and UPS
     docker run -d --name amazon-mock \
         -p 8081:8080 \
-        --network world-simulator_default \
+        --network world-network \
         -v "$(pwd)/amazon-mock-data.json:/data.json" \
         mockoon/cli:latest \
         -d /data.json \
@@ -75,7 +75,7 @@ get_world_id() {
     
     # If not found, try to get it from the database
     if [ -z "$WORLD_ID" ]; then
-        WORLD_ID=$(docker exec -i world-simulator_mydb_1 psql -U postgres -d worldSim -t -c "SELECT world_id FROM world ORDER BY world_id DESC LIMIT 1;" | tr -d ' ')
+        WORLD_ID=$(docker exec -i world-db psql -U postgres -d worldSim -t -c "SELECT world_id FROM world ORDER BY world_id DESC LIMIT 1;" | tr -d ' ')
     fi
     
     # Default to 1 if still not found
@@ -91,7 +91,7 @@ create_warehouses() {
     local world_id=$1
     echo "Creating warehouses in World ID: $world_id"
     
-    docker exec -i world-simulator_mydb_1 psql -U postgres -d worldSim <<EOF
+    docker exec -i world-db psql -U postgres -d worldSim <<EOF
 -- Create warehouses for testing
 INSERT INTO warehouse (wh_id, world_id, x, y)
 VALUES 
@@ -113,17 +113,17 @@ check_database_state() {
     
     # Check worlds - Use the actual column names in your database
     echo "Worlds:"
-    docker exec -i world-simulator_mydb_1 psql -U postgres -d worldSim -c "SELECT world_id FROM world;"
+    docker exec -i world-db psql -U postgres -d worldSim -c "SELECT world_id FROM world;"
     
     # Check warehouses
     echo ""
     echo "Warehouses:"
-    docker exec -i world-simulator_mydb_1 psql -U postgres -d worldSim -c "SELECT wh_id, world_id, x, y FROM warehouse ORDER BY world_id, wh_id;"
+    docker exec -i world-db psql -U postgres -d worldSim -c "SELECT wh_id, world_id, x, y FROM warehouse ORDER BY world_id, wh_id;"
     
     # Check trucks - Use the actual column names in your database
     echo ""
     echo "Trucks:"
-    docker exec -i world-simulator_mydb_1 psql -U postgres -d worldSim -c "SELECT truck_id, world_id, x, y FROM truck ORDER BY world_id, truck_id LIMIT 10;"
+    docker exec -i world-db psql -U postgres -d worldSim -c "SELECT truck_id, world_id, x, y FROM truck ORDER BY world_id, truck_id LIMIT 10;"
 }
 
 # Function to create mock amazon-mock-data.json for the Amazon mock service
@@ -287,20 +287,28 @@ run_tests() {
         return 1
     fi
     
-    echo "Running tests for AmazonNotificationService integration..."
+    echo "Running integration tests..."
     
-    # First run the tests individually so we can see focused results
+    # Run all integration tests
     set +e  # Don't exit on error
     
-    # Run just the specific test to verify AmazonNotificationService functionality
-    echo "Running just AmazonNotificationServiceTest..."
+    # Run individual test(s) first
+    echo "Running AmazonNotificationServiceTest..."
     mvn test -Dtest=AmazonNotificationServiceTest -DfailIfNoTests=false -Damazon.service.url=$AMAZON_SERVICE_URL
+    
+    # Add new tests here
+    echo "Running WorldSimulatorIntegrationTest..."
+    mvn test -Dtest=WorldSimulatorIntegrationTest -DfailIfNoTests=false
+    
+    # Run all integration tests (or specific category)
+    echo "Running all integration tests..."
+    mvn test -Dgroups=integration -Damazon.service.url=$AMAZON_SERVICE_URL
     TEST_RESULT=$?
     
     if [ $TEST_RESULT -eq 0 ]; then
-        echo "AmazonNotificationServiceTest passed successfully!"
+        echo "Integration tests passed successfully!"
     else
-        echo "AmazonNotificationServiceTest failed. See above for errors."
+        echo "Some integration tests failed. See above for errors."
     fi
     
     set -e  # Resume exit on error
@@ -327,17 +335,44 @@ cleanup() {
     rm -f amazon-mock-data.json
 }
 
+# Function to check if the whole environment is running (optional, can start it if needed)
+check_environment() {
+    echo "Checking if Docker environment is running..."
+    
+    if ! docker ps > /dev/null 2>&1; then
+        echo "Docker is not running. Please start Docker first."
+        exit 1
+    fi
+    
+    # Check if ups-app is running
+    if ! docker ps | grep -q ups-app; then
+        echo "UPS application is not running."
+        read -p "Do you want to start the entire environment? (y/n): " answer
+        if [ "$answer" = "y" ]; then
+            echo "Starting the entire environment..."
+            docker-compose up -d
+            echo "Waiting for services to initialize..."
+            sleep 15
+        else
+            echo "Test environment requires ups-app to be running. Exiting."
+            exit 1
+        fi
+    fi
+}
+
 # Main execution
-echo "Step 1: Checking World Simulator status"
+echo "Step 1: Checking Docker environment"
+check_environment
+
+echo ""
+echo "Step 2: Checking World Simulator status"
 if ! check_world_simulator; then
-    echo "Please start the World Simulator first:"
-    echo "  cd world-simulator"
-    echo "  docker-compose up -d"
+    echo "World Simulator is not running. It should have been started as part of the environment."
     exit 1
 fi
 
 echo ""
-echo "Step 2: Setting up Amazon Mock Service"
+echo "Step 3: Setting up Amazon Mock Service"
 if ! check_amazon_mock; then
     start_amazon_mock
 else
@@ -345,25 +380,25 @@ else
 fi
 
 echo ""
-echo "Step 3: Getting current World ID"
+echo "Step 4: Getting current World ID"
 WORLD_ID=$(get_world_id)
 echo "Using World ID: $WORLD_ID"
 
 echo ""
-echo "Step 4: Creating test warehouses"
+echo "Step 5: Creating test warehouses"
 create_warehouses "$WORLD_ID"
 
 echo ""
-echo "Step 5: Checking database state"
+echo "Step 6: Checking database state"
 check_database_state
 
 echo ""
-echo "Step 6: Running integration tests"
+echo "Step 7: Running integration tests"
 read -p "Press Enter to run tests or Ctrl+C to cancel..."
 run_tests
 
 echo ""
-echo "Step 7: Cleanup"
+echo "Step 8: Cleanup"
 read -p "Press Enter to clean up resources or Ctrl+C to keep them running..."
 cleanup
 

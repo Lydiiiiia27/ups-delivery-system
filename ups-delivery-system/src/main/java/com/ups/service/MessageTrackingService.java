@@ -5,9 +5,11 @@ import com.ups.repository.MessageLogRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -24,7 +26,7 @@ public class MessageTrackingService {
     private final MessageLogRepository messageLogRepository;
     private final AtomicLong sequenceNumber = new AtomicLong(0);
     
-    // Map to track processed messages (to avoid duplicate processing)
+    // Cache for processed messages to avoid duplicate processing
     private final Map<Long, Boolean> processedMessages = new ConcurrentHashMap<>();
     
     @Autowired
@@ -33,14 +35,17 @@ public class MessageTrackingService {
     }
     
     /**
-     * Get the next sequential message number
+     * Get the next sequence number for outgoing messages
+     * @return The next sequence number
      */
     public long getNextSeqNum() {
         return sequenceNumber.incrementAndGet();
     }
     
     /**
-     * Record an outgoing message to Amazon
+     * Record an outgoing message
+     * @param seqNum The sequence number of the message
+     * @param messageType The type of message
      */
     public void recordOutgoingMessage(long seqNum, String messageType) {
         MessageLog log = new MessageLog();
@@ -54,7 +59,9 @@ public class MessageTrackingService {
     }
     
     /**
-     * Record an incoming message from Amazon
+     * Record an incoming message
+     * @param seqNum The sequence number of the message
+     * @param messageType The type of message
      */
     public void recordIncomingMessage(long seqNum, String messageType) {
         MessageLog log = new MessageLog();
@@ -68,67 +75,78 @@ public class MessageTrackingService {
     }
     
     /**
-     * Mark a message as acknowledged
+     * Acknowledge a message
+     * @param seqNum The sequence number of the message to acknowledge
+     * @return true if the message was found and acknowledged, false otherwise
      */
     public boolean acknowledgeMessage(long seqNum) {
         MessageLog log = messageLogRepository.findBySeqNum(seqNum);
         if (log != null) {
             log.setAcknowledged(Instant.now());
             messageLogRepository.save(log);
-            logger.debug("Acknowledged message with seqNum: {}", seqNum);
+            logger.debug("Acknowledged message with seq_num: {}", seqNum);
             return true;
         }
         
-        logger.warn("Tried to acknowledge unknown message with seqNum: {}", seqNum);
+        logger.warn("Attempted to acknowledge unknown message with seq_num: {}", seqNum);
         return false;
     }
     
     /**
-     * Get all unacknowledged outgoing messages
+     * Get unacknowledged messages
+     * @return List of unacknowledged messages
      */
     public List<MessageLog> getUnacknowledgedMessages() {
         return messageLogRepository.findByAcknowledgedIsNullAndDirection("OUTGOING");
     }
     
     /**
-     * Check if a message has already been processed to avoid duplicate processing
+     * Check if a message has already been processed
      * @param seqNum The sequence number to check
-     * @return true if the message has already been processed
+     * @return true if the message has been processed, false otherwise
      */
     public boolean isMessageProcessed(Long seqNum) {
         return processedMessages.containsKey(seqNum);
     }
     
     /**
-     * Mark a message as processed to avoid duplicate processing
+     * Mark a message as processed
      * @param seqNum The sequence number of the processed message
-     * @param messageType The type of message processed
+     * @param messageType The type of message
      */
     public void markMessageProcessed(Long seqNum, String messageType) {
         processedMessages.put(seqNum, Boolean.TRUE);
         logger.debug("Marked message as processed: {} with seq_num: {}", messageType, seqNum);
         
-        // Also record this as an incoming message for tracking
+        // Also record this as an incoming message
         recordIncomingMessage(seqNum, messageType);
     }
     
     /**
-     * Clean up old processed message records to prevent memory leaks.
-     * Should be called periodically by a scheduled task.
-     * 
-     * @param maxAgeMinutes the maximum age of records to keep in minutes
+     * Clean up old message logs
      */
-    public void cleanupOldRecords(int maxAgeMinutes) {
-        Instant cutoff = Instant.now().minusSeconds(maxAgeMinutes * 60L);
-        
-        // Find old records in the repository and delete them
-        List<MessageLog> oldLogs = messageLogRepository.findAll().stream()
-                .filter(log -> log.getTimestamp().isBefore(cutoff) && log.getAcknowledged() != null)
-                .toList();
+    @Scheduled(cron = "0 0 0 * * *") // Run at midnight every day
+    public void cleanupOldLogs() {
+        // Delete logs older than 7 days
+        Instant cutoff = Instant.now().minus(7, ChronoUnit.DAYS);
+        List<MessageLog> oldLogs = messageLogRepository.findByTimestampBefore(cutoff);
         
         if (!oldLogs.isEmpty()) {
             messageLogRepository.deleteAll(oldLogs);
             logger.info("Cleaned up {} old message logs", oldLogs.size());
+        }
+    }
+    
+    /**
+     * Clean up the processed messages cache
+     */
+    @Scheduled(fixedRate = 3600000) // Run every hour
+    public void cleanupProcessedMessagesCache() {
+        int size = processedMessages.size();
+        if (size > 10000) {
+            logger.info("Cleaning up processed messages cache, size before: {}", size);
+            processedMessages.clear();
+            logger.info("Processed messages cache cleared");
         }
     }
 }

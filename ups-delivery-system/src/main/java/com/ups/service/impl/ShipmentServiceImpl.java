@@ -1,7 +1,7 @@
 package com.ups.service.impl;
 
-import com.ups.model.amazon.CreateShipmentRequest;
-import com.ups.model.amazon.CreateShipmentResponse;
+import com.ups.model.CreateShipmentRequest;
+import com.ups.model.CreateShipmentResponse;
 import com.ups.model.entity.*;
 import com.ups.repository.PackageItemRepository;
 import com.ups.repository.PackageRepository;

@@ -1,6 +1,6 @@
 version: '3'
 services:
-  # UPS application only
+  # PostgreSQL database for UPS
   ups-db:
     image: postgres:12-alpine3.15
     container_name: ups-db
@@ -13,15 +13,15 @@ services:
     networks:
       - ups-network
 
+  # UPS application
   ups-app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: ups-app
-    ports:
-      - "8080:8080"
     depends_on:
       - ups-db
+      - world-simulator
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://ups-db:5432/ups
       - SPRING_DATASOURCE_USERNAME=postgres
@@ -29,29 +29,58 @@ services:
       - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
       - SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect
-      - SPRING_PROFILES_ACTIVE=docker
-      - UPS_WORLD_HOST=world-simulator_server_1
+      - UPS_WORLD_HOST=world-simulator
       - UPS_WORLD_PORT=12345
       - UPS_INIT_TRUCKS=5
       - UPS_WORLD_SIM_SPEED=100
+      - UPS_WORLD_CREATE_NEW=true
+      - AMAZON_SERVICE_URL=http://amazon:8080
+    ports:
+      - "8080:8080"
+    networks:
+      - ups-network
+      - world-network
     command: >
-      /bin/sh -c "
-        chmod +x ./wait-for-it.sh &&
+      sh -c "
         ./wait-for-it.sh ups-db:5432 --timeout=30 --strict -- 
         ./wait-for-it.sh world-simulator:12345 --timeout=30 --strict -- 
         java -jar app.jar
       "
-    volumes:
-      - ./wait-for-it.sh:/app/wait-for-it.sh
+
+  # World Simulator
+  world-simulator:
+    build:
+      context: ./ups-delivery-system/world-simulator
+      dockerfile: Dockerfile
+    container_name: world-simulator
+    depends_on:
+      - world-db
+    command: bash -c "./wait-for-it.sh world-db:5432 --strict -- ./server 12345 23456 0"
+    ports:
+      - "12345:12345"
+      - "23456:23456"
     networks:
-      - ups-network
-      - world-simulator_default  # Connect to the network created by world-simulator
+      - world-network
+
+  # World Simulator Database
+  world-db:
+    image: postgres:12-alpine3.15
+    container_name: world-db
+    environment:
+      POSTGRES_PASSWORD: abc123
+      POSTGRES_USER: postgres
+      POSTGRES_DB: worldSim
+    networks:
+      - world-network
+    volumes:
+      - world-data:/var/lib/postgresql/data
 
 networks:
   ups-network:
     driver: bridge
-  world-simulator_default:  # This network will be created by the world-simulator
-    external: true  # Use the existing network created by world-simulator
+  world-network:
+    driver: bridge
 
 volumes:
   ups-data:
+  world-data:
