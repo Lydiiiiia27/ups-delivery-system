@@ -24,6 +24,7 @@ com/ups/repository/MessageLogRepository.class
 com/ups/model/amazon/QueryShipmentStatusResponse.class
 com/ups/model/amazon/CreateShipmentResponse.class
 com/ups/WorldUpsProto$UConnect.class
+com/ups/service/world/WorldResponseHandler$1.class
 com/ups/controller/UserController.class
 com/ups/service/ShipmentService.class
 com/ups/WorldUpsProto$UFinished$1.class
@@ -48,8 +49,8 @@ com/ups/WorldUpsProto.class
 com/ups/service/world/Ups.class
 com/ups/config/SecurityConfig.class
 com/ups/WorldUpsProto$UErr.class
-com/ups/WorldUpsProto$UConnect$Builder.class
 com/ups/WorldUpsProto$UInitTruck.class
+com/ups/WorldUpsProto$UConnect$Builder.class
 com/ups/WorldUpsProto$UCommands.class
 com/ups/WorldUpsProto$UResponsesOrBuilder.class
 com/ups/model/amazon/QueryShipmentStatusRequest.class

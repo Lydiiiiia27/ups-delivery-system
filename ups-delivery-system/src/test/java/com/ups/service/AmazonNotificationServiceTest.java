@@ -8,6 +8,7 @@ import com.ups.model.amazon.UpdateShipmentStatus;
 import com.ups.model.entity.Package;
 import com.ups.model.entity.Truck;
 import com.ups.model.entity.Warehouse;
+import com.ups.repository.MessageLogRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +37,9 @@ public class AmazonNotificationServiceTest {
 
     @Mock
     private MessageTrackingService messageTrackingService;
+    
+    @Mock
+    private MessageLogRepository messageLogRepository;
 
     @Mock
     private RestTemplate restTemplate;
@@ -50,6 +54,7 @@ public class AmazonNotificationServiceTest {
         
         amazonNotificationService = new AmazonNotificationService(
                 messageTrackingService,
+                messageLogRepository,
                 restTemplate,
                 objectMapper
         );
@@ -81,7 +86,7 @@ public class AmazonNotificationServiceTest {
         warehouse.setY(10);
         
         when(messageTrackingService.getNextSeqNum()).thenReturn(1001L);
-        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Void.class)))
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Object.class)))
             .thenReturn(ResponseEntity.ok().build());
 
         // Act
@@ -105,7 +110,7 @@ public class AmazonNotificationServiceTest {
         truck.setY(50);
         
         when(messageTrackingService.getNextSeqNum()).thenReturn(1002L);
-        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Void.class)))
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Object.class)))
             .thenReturn(ResponseEntity.ok().build());
 
         // Act
@@ -127,7 +132,7 @@ public class AmazonNotificationServiceTest {
         truck.setY(30);
         
         when(messageTrackingService.getNextSeqNum()).thenReturn(1003L);
-        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Void.class)))
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Object.class)))
             .thenReturn(ResponseEntity.ok().build());
 
         // Act
@@ -144,7 +149,7 @@ public class AmazonNotificationServiceTest {
         pkg.setId(123L);
         
         when(messageTrackingService.getNextSeqNum()).thenReturn(1004L);
-        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Void.class)))
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Object.class)))
             .thenReturn(ResponseEntity.ok().build());
 
         // Act
@@ -166,12 +171,18 @@ public class AmazonNotificationServiceTest {
         when(messageTrackingService.getNextSeqNum()).thenReturn(1005L);
 
         doThrow(new RuntimeException("Network error"))
-            .when(restTemplate).postForEntity(anyString(), any(HttpEntity.class), eq(Void.class));
+            .when(restTemplate).postForEntity(anyString(), any(HttpEntity.class), eq(Object.class));
 
-        // Act - should not throw exception
-        amazonNotificationService.sendStatusUpdate(pkg, truck, "ERROR", "Test error");
+        // Act - should not throw exception due to our retry mechanism
+        try {
+            amazonNotificationService.sendStatusUpdate(pkg, truck, "ERROR", "Test error");
+            fail("Should have thrown exception after retry attempts");
+        } catch (Exception e) {
+            // Expected exception after retries
+            assertTrue(e.getMessage().contains("Failed to send notification"));
+        }
 
         // Assert - message tracking should still be called even if notification fails
         verify(messageTrackingService).recordOutgoingMessage(eq(1005L), eq("UpdateShipmentStatus"));
     }
-} 
+}

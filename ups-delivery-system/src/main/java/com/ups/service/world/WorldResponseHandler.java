@@ -58,10 +58,10 @@ public class WorldResponseHandler {
     }
     
     /**
-     * Processes responses from the queue
+     * Processes responses from the queue in a continuous loop
      */
-    @Transactional
     public void processResponses() {
+        logger.info("Starting World Response Handler processing loop");
         while (running && !Thread.currentThread().isInterrupted()) {
             try {
                 WorldUpsProto.UResponses response = responseQueue.take();
@@ -74,9 +74,19 @@ public class WorldResponseHandler {
                 logger.error("Error processing response", e);
             }
         }
+        logger.info("Exiting World Response Handler processing loop");
     }
     
+    /**
+     * Process a response from the World Simulator
+     */
+    @Transactional
     private void processResponse(WorldUpsProto.UResponses response) {
+        logger.debug("Processing World Simulator response");
+        
+        // Process acknowledgements first
+        processAcknowledgements(response);
+        
         // Process completions
         for (WorldUpsProto.UFinished completion : response.getCompletionsList()) {
             processCompletion(completion);
@@ -100,15 +110,26 @@ public class WorldResponseHandler {
         // Handle finished flag
         if (response.hasFinished() && response.getFinished()) {
             logger.info("World simulation finished");
-            
-            // Notify Amazon about all incomplete packages
             notifySimulationFinished();
-            
-            // Stop the response handler
             stop();
         }
     }
     
+    /**
+     * Process acknowledgements from the World Simulator
+     */
+    private void processAcknowledgements(WorldUpsProto.UResponses response) {
+        if (response.getAcksCount() > 0) {
+            logger.debug("Received {} acknowledgements", response.getAcksCount());
+            
+            // TODO: Update the status of acknowledged messages
+        }
+    }
+    
+    /**
+     * Process a completion notification from the World Simulator
+     */
+    @Transactional
     private void processCompletion(WorldUpsProto.UFinished completion) {
         logger.info("Processing completion for truck {} at ({},{}) with status {}", 
                 completion.getTruckid(), completion.getX(), completion.getY(), completion.getStatus());
@@ -123,6 +144,7 @@ public class WorldResponseHandler {
             switch (completion.getStatus().toLowerCase()) {
                 case "arrive warehouse":
                     truck.setStatus(TruckStatus.ARRIVE_WAREHOUSE);
+                    truckRepository.save(truck);
                     
                     // Find packages assigned to this truck
                     List<Package> packages = packageRepository.findByTruckAndStatus(truck, PackageStatus.ASSIGNED);
@@ -131,35 +153,46 @@ public class WorldResponseHandler {
                         Optional<Warehouse> warehouseOpt = findNearestWarehouse(completion.getX(), completion.getY());
                         if (warehouseOpt.isPresent()) {
                             Warehouse warehouse = warehouseOpt.get();
-                            // Notify Amazon for each package
+                            
+                            // Notify Amazon for each package and update package status
                             for (Package pkg : packages) {
+                                // Send notification to Amazon
                                 amazonNotificationService.notifyTruckArrival(pkg, truck, warehouse);
+                                
                                 // Update package status
                                 pkg.setStatus(PackageStatus.PICKUP_READY);
                                 packageRepository.save(pkg);
+                                
+                                logger.info("Notified Amazon about truck {} arrival at warehouse {} for package {}", 
+                                        truck.getId(), warehouse.getId(), pkg.getId());
                             }
-                            logger.info("Notified Amazon about truck {} arrival at warehouse {}", 
-                                    truck.getId(), warehouse.getId());
                         } else {
                             logger.error("Could not find warehouse near coordinates ({},{})", 
                                     completion.getX(), completion.getY());
                         }
                     }
                     break;
+                    
                 case "idle":
                     truck.setStatus(TruckStatus.IDLE);
+                    truckRepository.save(truck);
                     break;
+                    
                 default:
                     logger.warn("Unknown completion status: {}", completion.getStatus());
+                    break;
             }
             
-            truckRepository.save(truck);
             logger.info("Updated truck {} status to {}", truck.getId(), truck.getStatus());
         } else {
             logger.error("Truck {} not found for completion update", completion.getTruckid());
         }
     }
     
+    /**
+     * Process a delivery notification from the World Simulator
+     */
+    @Transactional
     private void processDelivery(WorldUpsProto.UDeliveryMade delivery) {
         logger.info("Processing delivery for package {} by truck {}", 
                 delivery.getPackageid(), delivery.getTruckid());
@@ -171,6 +204,7 @@ public class WorldResponseHandler {
             Package pkg = packageOpt.get();
             Truck truck = truckOpt.get();
             
+            // Mark the package as delivered
             pkg.setStatus(PackageStatus.DELIVERED);
             packageRepository.save(pkg);
             logger.info("Marked package {} as delivered", pkg.getId());
@@ -193,6 +227,10 @@ public class WorldResponseHandler {
         }
     }
     
+    /**
+     * Process a truck status update from the World Simulator
+     */
+    @Transactional
     private void processTruckStatus(WorldUpsProto.UTruck truckStatus) {
         logger.info("Processing truck status update for truck {} - status: {}, location: ({},{})", 
                 truckStatus.getTruckid(), truckStatus.getStatus(), truckStatus.getX(), truckStatus.getY());
@@ -225,6 +263,7 @@ public class WorldResponseHandler {
                     break;
                 default:
                     logger.warn("Unknown truck status: {}", truckStatus.getStatus());
+                    break;
             }
             
             // If status has changed, update Amazon
@@ -234,9 +273,13 @@ public class WorldResponseHandler {
                 // Find packages associated with this truck and update Amazon
                 List<Package> packages = packageRepository.findByTruck(truck);
                 for (Package pkg : packages) {
+                    // Update package status based on truck status
+                    updatePackageStatus(pkg, newStatus);
+                    
+                    // Send status update to Amazon
                     amazonNotificationService.sendStatusUpdate(pkg, truck, 
-                            truck.getStatus().toString(), 
-                            "Truck " + truck.getId() + " status changed to " + truck.getStatus());
+                            newStatus.toString(), 
+                            "Truck " + truck.getId() + " status changed to " + newStatus);
                 }
             }
             
@@ -246,6 +289,54 @@ public class WorldResponseHandler {
         }
     }
     
+    /**
+     * Update package status based on truck status
+     */
+    private void updatePackageStatus(Package pkg, TruckStatus truckStatus) {
+        PackageStatus oldStatus = pkg.getStatus();
+        PackageStatus newStatus = oldStatus;
+        
+        // Update package status based on truck status
+        switch (truckStatus) {
+            case LOADING:
+                if (oldStatus == PackageStatus.PICKUP_READY) {
+                    newStatus = PackageStatus.LOADING;
+                }
+                break;
+            case DELIVERING:
+                if (oldStatus == PackageStatus.LOADING || oldStatus == PackageStatus.LOADED) {
+                    newStatus = PackageStatus.DELIVERING;
+                }
+                break;
+            case IDLE:
+                // If truck is idle and package was being delivered, it might be delivered
+                if (oldStatus == PackageStatus.DELIVERING) {
+                    // Check if we're at delivery destination
+                    Truck truck = pkg.getTruck();
+                    if (truck != null && 
+                            truck.getX() == pkg.getDestinationX() && 
+                            truck.getY() == pkg.getDestinationY()) {
+                        newStatus = PackageStatus.DELIVERED;
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+        
+        // Update if status changed
+        if (oldStatus != newStatus) {
+            pkg.setStatus(newStatus);
+            packageRepository.save(pkg);
+            logger.info("Updated package {} status from {} to {}", 
+                    pkg.getId(), oldStatus, newStatus);
+        }
+    }
+    
+    /**
+     * Process an error from the World Simulator
+     */
+    @Transactional
     private void processError(WorldUpsProto.UErr error) {
         logger.error("World error for sequence {}: {}", error.getOriginseqnum(), error.getErr());
         
@@ -254,7 +345,7 @@ public class WorldResponseHandler {
         for (Package pkg : packages) {
             // Only notify for packages that are in transit or being processed
             if (pkg.getStatus() == PackageStatus.ASSIGNED || 
-                pkg.getStatus() == PackageStatus.OUT_FOR_DELIVERY || 
+                pkg.getStatus() == PackageStatus.DELIVERING || 
                 pkg.getStatus() == PackageStatus.LOADING) {
                 
                 // Get the truck if available
@@ -271,8 +362,6 @@ public class WorldResponseHandler {
                 logger.info("Sent error notification to Amazon for package {}", pkg.getId());
             }
         }
-        
-        // TODO: Implement retry mechanism for specific operations if needed
     }
     
     /**
@@ -314,6 +403,7 @@ public class WorldResponseHandler {
     /**
      * Notify Amazon that the simulation has finished and handle any incomplete deliveries
      */
+    @Transactional
     private void notifySimulationFinished() {
         // Find all packages that are not in terminal state
         List<Package> incompletePackages = packageRepository.findAll().stream()
@@ -342,7 +432,11 @@ public class WorldResponseHandler {
         logger.info("Processed {} incomplete packages at simulation end", incompletePackages.size());
     }
     
+    /**
+     * Stop the response handler
+     */
     public void stop() {
+        logger.info("Stopping World Response Handler");
         running = false;
     }
 }
