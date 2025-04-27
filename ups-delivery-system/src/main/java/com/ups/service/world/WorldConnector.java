@@ -6,10 +6,10 @@ import com.ups.model.Location;
 import com.ups.model.entity.Truck;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.ups.WorldUpsProto;
-
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,18 +25,33 @@ public class WorldConnector {
     private Socket socket;
     private AtomicLong seqNum = new AtomicLong(1);
     private Long worldId;
-
+    private final WorldResponseListener responseListener;
+    
+    // Default constructor for Spring
     public WorldConnector() {
-        // Default constructor for Spring
+        this.responseListener = null;
+    }
+    
+    @Autowired
+    public WorldConnector(WorldResponseListener responseListener) {
+        this.responseListener = responseListener;
     }
 
-    public WorldConnector(String host, int port, List<Truck> trucks) throws IOException {
+    public WorldConnector(String host, int port, List<Truck> trucks, WorldResponseListener listener) throws IOException {
+        this.responseListener = listener;
         try {
             this.socket = new Socket(host, port);
             connect(1, false, trucks);
+            // Start the response listener after successful connection
+            if (responseListener != null) {
+                responseListener.startListening(socket);
+            }
         } catch (IllegalArgumentException e) {
             this.socket = new Socket(host, port);
             connect(1, true, trucks);
+            if (responseListener != null) {
+                responseListener.startListening(socket);
+            }
         }
     }
 
@@ -99,8 +114,8 @@ public class WorldConnector {
         commandsBuilder.addDeliveries(deliverRequest);
         WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
 
-        WorldUpsProto.UResponses responses = sendAndReceive(commandsRequest);
-        processResponse(responses);
+        // Send command without waiting for response (response will be handled by listener)
+        sendMessage(commandsRequest);
     }
 
     public void pickup(int truckId, int warehouseId, long seqNum) throws IOException {
@@ -116,8 +131,8 @@ public class WorldConnector {
         commandsBuilder.addPickups(pickupRequest);
         WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
 
-        WorldUpsProto.UResponses responses = sendAndReceive(commandsRequest);
-        processResponse(responses);
+        // Send command without waiting for response (response will be handled by listener)
+        sendMessage(commandsRequest);
     }
     
     public void query(int truckId, long seqNum) throws IOException {
@@ -132,8 +147,8 @@ public class WorldConnector {
         commandsBuilder.addQueries(queryRequest);
         WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
 
-        WorldUpsProto.UResponses responses = sendAndReceive(commandsRequest);
-        processResponse(responses);
+        // Send command without waiting for response (response will be handled by listener)
+        sendMessage(commandsRequest);
     }
 
     public void setSimulationSpeed(int speed) throws IOException {
@@ -141,16 +156,11 @@ public class WorldConnector {
         commandsBuilder.setSimspeed(speed);
         WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
         
-        WorldUpsProto.UResponses responses = sendAndReceive(commandsRequest);
-        processResponse(responses);
+        // Send command without waiting for response (response will be handled by listener)
+        sendMessage(commandsRequest);
         logger.info("Simulation speed set to: {}", speed);
     }
     
-    /**
-     * Disconnects from the world simulator and cleans up resources.
-     * 
-     * @throws IOException If disconnection fails
-     */
     public void disconnect() throws IOException {
         if (socket == null || socket.isClosed()) {
             logger.info("Already disconnected from world simulator");
@@ -158,19 +168,20 @@ public class WorldConnector {
         }
         
         try {
+            // Stop the response listener first
+            if (responseListener != null) {
+                responseListener.stopListening();
+            }
+            
             // Send disconnect command
             WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
             commandsBuilder.setDisconnect(true);
             WorldUpsProto.UCommands commandsRequest = commandsBuilder.build();
             
-            WorldUpsProto.UResponses responses = sendAndReceive(commandsRequest);
-            processResponse(responses);
+            // Send the disconnect command
+            sendMessage(commandsRequest);
             
-            if (responses.hasFinished() && responses.getFinished()) {
-                logger.info("Successfully disconnected from world simulator for world ID: {}", worldId);
-            } else {
-                logger.warn("World simulator did not confirm disconnect for world ID: {}", worldId);
-            }
+            logger.info("Sent disconnect command to world simulator for world ID: {}", worldId);
         } catch (Exception e) {
             logger.warn("Error during disconnect from world simulator: {}", e.getMessage());
         } finally {
@@ -188,46 +199,6 @@ public class WorldConnector {
             this.socket = null;
             this.seqNum.set(1);
             this.worldId = null;
-        }
-    }
-    private WorldUpsProto.UResponses sendAndReceive(WorldUpsProto.UCommands commandsRequest) throws IOException {
-        sendMessage(commandsRequest);
-        WorldUpsProto.UResponses response = receiveMessage(WorldUpsProto.UResponses.parser());
-        
-        // Process acknowledgments
-        if (response.getAcksCount() > 0) {
-            logger.debug("Received {} acknowledgments", response.getAcksCount());
-        }
-        
-        return response;
-    }
-
-    private void processResponse(WorldUpsProto.UResponses response) {
-        // Process completions
-        for (WorldUpsProto.UFinished completion : response.getCompletionsList()) {
-            logger.info("Truck {} completed job at ({},{}) with status: {}", 
-                    completion.getTruckid(), completion.getX(), completion.getY(), completion.getStatus());
-        }
-        
-        // Process deliveries
-        for (WorldUpsProto.UDeliveryMade delivery : response.getDeliveredList()) {
-            logger.info("Truck {} delivered package {}", delivery.getTruckid(), delivery.getPackageid());
-        }
-        
-        // Process truck status updates
-        for (WorldUpsProto.UTruck truck : response.getTruckstatusList()) {
-            logger.info("Truck {} status: {} at location ({},{})", 
-                    truck.getTruckid(), truck.getStatus(), truck.getX(), truck.getY());
-        }
-        
-        // Process errors
-        for (WorldUpsProto.UErr error : response.getErrorList()) {
-            logger.error("Error for sequence {}: {}", error.getOriginseqnum(), error.getErr());
-        }
-        
-        // Handle finished flag
-        if (response.hasFinished()) {
-            logger.info("World simulation finished: {}", response.getFinished());
         }
     }
 
@@ -270,49 +241,5 @@ public class WorldConnector {
     
     public long getNextSeqNum() {
         return seqNum.getAndIncrement();
-    }
-
-    // Add a simple test method in WorldConnector
-    public void testConnection() {
-    try {
-        // Initialize with a few test trucks
-        List<Truck> trucks = new ArrayList<>();
-        Truck truck = new Truck();
-        truck.setId(1);
-        truck.setX(0);
-        truck.setY(0);
-        trucks.add(truck);
-        
-        WorldConnector connector = new WorldConnector("localhost", 12345, trucks);
-        System.out.println("Connected to world with ID: " + connector.getWorldId());
-        
-        // Test a pickup request
-        connector.pickup(1, 1, connector.getNextSeqNum());
-        
-        // Disconnect
-        connector.disconnect();
-    } catch (Exception e) {
-        e.printStackTrace();
-        }
-    }
-        /**
-     * Connects to the world simulator with a new world for testing purposes.
-     * 
-     * @param host The world simulator host
-     * @param port The world simulator port
-     * @param trucks The list of trucks to initialize
-     * @return The new world ID
-     * @throws IOException If connection fails
-     */
-    public Long connectWithNewWorld(String host, int port, List<Truck> trucks) throws IOException {
-        try {
-            this.socket = new Socket(host, port);
-            // Always create a new world (newWorld = true)
-            connect(0, true, trucks);
-            return this.worldId;
-        } catch (Exception e) {
-            logger.error("Failed to connect to world simulator with new world: {}", e.getMessage());
-            throw e;
-        }
     }
 }

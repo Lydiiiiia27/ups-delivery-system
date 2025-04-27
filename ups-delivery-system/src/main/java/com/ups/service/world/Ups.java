@@ -20,14 +20,17 @@ import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class Ups {
     private static final Logger logger = LoggerFactory.getLogger(Ups.class);
     
-    private final WorldConnector worldConnector;
+    private WorldConnector worldConnector;
     private final TruckRepository truckRepository;
     private final PackageRepository packageRepository;
+    private final WorldResponseListener responseListener;
+    private final WorldResponseHandler responseHandler;
     
     @Value("${ups.world.host:localhost}")
     private String worldHost;
@@ -42,10 +45,14 @@ public class Ups {
     private int worldSimSpeed;
     
     @Autowired
-    public Ups(TruckRepository truckRepository, PackageRepository packageRepository) {
+    public Ups(TruckRepository truckRepository, 
+               PackageRepository packageRepository,
+               WorldResponseListener responseListener,
+               WorldResponseHandler responseHandler) {
         this.truckRepository = truckRepository;
         this.packageRepository = packageRepository;
-        this.worldConnector = new WorldConnector();
+        this.responseListener = responseListener;
+        this.responseHandler = responseHandler;
     }
     
     @PostConstruct
@@ -59,14 +66,22 @@ public class Ups {
                 trucks = truckRepository.findAll();
             }
             
-            // Connect to world simulator
-            WorldConnector connector = new WorldConnector(worldHost, worldPort, trucks);
+            // Connect to world simulator with response listener
+            this.worldConnector = new WorldConnector(worldHost, worldPort, trucks, responseListener);
+            
+            // Start the response handler in a separate thread
+            CompletableFuture.runAsync(() -> {
+                responseHandler.processResponses();
+            }).exceptionally(ex -> {
+                logger.error("Response handler thread failed", ex);
+                return null;
+            });
             
             // Set simulation speed
-            connector.setSimulationSpeed(worldSimSpeed);
+            worldConnector.setSimulationSpeed(worldSimSpeed);
             
             logger.info("Connected to world simulator at {}:{} with world ID: {}", 
-                    worldHost, worldPort, connector.getWorldId());
+                    worldHost, worldPort, worldConnector.getWorldId());
         } catch (IOException e) {
             logger.error("Failed to connect to world simulator: {}", e.getMessage(), e);
         }
@@ -75,7 +90,14 @@ public class Ups {
     @PreDestroy
     public void cleanup() {
         try {
-            if (worldConnector.isConnected()) {
+            // Stop the response handler
+            responseHandler.stop();
+            
+            // Stop the response listener
+            responseListener.stopListening();
+            
+            // Disconnect from world simulator
+            if (worldConnector != null && worldConnector.isConnected()) {
                 worldConnector.disconnect();
                 logger.info("Disconnected from world simulator");
             }
@@ -171,34 +193,6 @@ public class Ups {
         }
     }
     
-    @Transactional
-    public void updateTruckStatus(int truckId, TruckStatus status, int x, int y) {
-        Optional<Truck> truckOpt = truckRepository.findById(truckId);
-        if (truckOpt.isPresent()) {
-            Truck truck = truckOpt.get();
-            truck.setStatus(status);
-            truck.setX(x);
-            truck.setY(y);
-            truckRepository.save(truck);
-            logger.info("Updated truck {} status to {} at location ({},{})", truckId, status, x, y);
-        } else {
-            logger.error("Truck with ID {} not found for status update", truckId);
-        }
-    }
-    
-    @Transactional
-    public void markPackageDelivered(long packageId) {
-        Optional<Package> packageOpt = packageRepository.findById(packageId);
-        if (packageOpt.isPresent()) {
-            Package pkg = packageOpt.get();
-            pkg.setStatus(PackageStatus.DELIVERED);
-            packageRepository.save(pkg);
-            logger.info("Marked package {} as delivered", packageId);
-        } else {
-            logger.error("Package with ID {} not found for delivery update", packageId);
-        }
-    }
-    
     // Periodically check truck statuses
     @Scheduled(fixedRate = 60000) // Check every minute
     public void checkTruckStatuses() {
@@ -214,6 +208,6 @@ public class Ups {
     
     // Method for other services to get the world ID
     public Long getWorldId() {
-        return worldConnector.getWorldId();
+        return worldConnector != null ? worldConnector.getWorldId() : null;
     }
 }

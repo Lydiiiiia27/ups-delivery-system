@@ -3,6 +3,7 @@ package com.ups.helper;
 import com.ups.model.entity.Truck;
 import com.ups.model.entity.TruckStatus;
 import com.ups.service.world.WorldConnector;
+import com.ups.service.world.WorldResponseListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +21,9 @@ public class WorldConnectorTestHelper {
     @Autowired
     private WorldConnector worldConnector;
     
+    @Autowired
+    private WorldResponseListener responseListener;
+    
     /**
      * Connects to the world simulator with a new world for testing.
      * 
@@ -31,7 +35,7 @@ public class WorldConnectorTestHelper {
     public Long setupTestWorld(String host, int port, List<Truck> trucks) {
         try {
             // Use the provided trucks list instead of calling createTestTrucks()
-            WorldConnector connector = new WorldConnector(host, port, trucks);
+            WorldConnector connector = new WorldConnector(host, port, trucks, responseListener);
             return connector.getWorldId();
         } catch (Exception e) {
             logger.error("Failed to set up test world: {}", e.getMessage());

@@ -1,4 +1,6 @@
-com/ups/service/world/WorldConnectorIntegrationTest.class
 com/ups/controller/AmazonApiControllerTest.class
+com/ups/service/world/WorldConnectorIntegrationTest.class
+com/ups/service/world/WorldResponseHandlingIntegrationTest.class
+com/ups/service/world/WorldResponseHandlerTest.class
 com/ups/helper/WorldConnectorTestHelper.class
 com/ups/AppTest.class
