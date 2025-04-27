@@ -15,7 +15,7 @@ services:
 
   ups-app:
     build:
-      context: ./ups-delivery-system
+      context: .
       dockerfile: Dockerfile
     container_name: ups-app
     ports:
@@ -26,7 +26,10 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://ups-db:5432/ups
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=postgres
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect
+      - SPRING_PROFILES_ACTIVE=docker
       - UPS_WORLD_HOST=world-simulator_server_1
       - UPS_WORLD_PORT=12345
       - UPS_INIT_TRUCKS=5
