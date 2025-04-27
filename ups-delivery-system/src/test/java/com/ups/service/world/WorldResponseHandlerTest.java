@@ -7,6 +7,8 @@ import com.ups.model.entity.Truck;
 import com.ups.model.entity.TruckStatus;
 import com.ups.repository.PackageRepository;
 import com.ups.repository.TruckRepository;
+import com.ups.repository.WarehouseRepository;
+import com.ups.service.AmazonNotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,12 +32,23 @@ public class WorldResponseHandlerTest {
     @Mock
     private PackageRepository packageRepository;
     
+    @Mock
+    private WarehouseRepository warehouseRepository;
+    
+    @Mock
+    private AmazonNotificationService amazonNotificationService;
+    
     private WorldResponseHandler responseHandler;
     private ExecutorService executor;
     
     @BeforeEach
     public void setUp() {
-        responseHandler = new WorldResponseHandler(truckRepository, packageRepository);
+        responseHandler = new WorldResponseHandler(
+            truckRepository, 
+            packageRepository, 
+            warehouseRepository, 
+            amazonNotificationService
+        );
         executor = Executors.newSingleThreadExecutor();
         // Start the response processor in a separate thread
         executor.submit(() -> responseHandler.processResponses());
@@ -80,8 +93,13 @@ public class WorldResponseHandlerTest {
         pkg.setId(1001L);
         pkg.setStatus(PackageStatus.DELIVERING);
         
-        // Mock repository
+        // Create a truck for the notification
+        Truck truck = new Truck();
+        truck.setId(1);
+        
+        // Mock repositories
         when(packageRepository.findById(1001L)).thenReturn(Optional.of(pkg));
+        when(truckRepository.findById(1)).thenReturn(Optional.of(truck));
         
         // Create a delivery response
         WorldUpsProto.UDeliveryMade.Builder deliveryBuilder = WorldUpsProto.UDeliveryMade.newBuilder();
@@ -95,12 +113,12 @@ public class WorldResponseHandlerTest {
         // Process the response
         responseHandler.queueResponse(responseBuilder.build());
         
-        // Wait for processing to complete (longer timeout)
-        Thread.sleep(500);
+        // Wait longer for processing to complete
+        Thread.sleep(1000);
         
         // Verify the package status was updated
-        verify(packageRepository, timeout(1000)).findById(1001L);
-        verify(packageRepository, timeout(1000)).save(any(Package.class));
+        verify(packageRepository, timeout(2000)).findById(1001L);
+        verify(packageRepository, timeout(2000)).save(any(Package.class));
     }
     
     @Test

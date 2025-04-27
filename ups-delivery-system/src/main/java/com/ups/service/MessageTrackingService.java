@@ -1,103 +1,115 @@
 package com.ups.service;
 
+import com.ups.model.MessageLog;
+import com.ups.repository.MessageLogRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Service to track message sequence numbers and handle acknowledgments
- * for the Amazon-UPS communication protocol.
+ * Service for tracking messages sent to and received from Amazon
  */
 @Service
 public class MessageTrackingService {
+    
     private static final Logger logger = LoggerFactory.getLogger(MessageTrackingService.class);
     
-    // Starting sequence number for outgoing messages
-    private static final long INITIAL_SEQ_NUM = 1000;
+    private final MessageLogRepository messageLogRepository;
+    private final AtomicLong sequenceNumber = new AtomicLong(0);
     
-    // Generator for sequence numbers
-    private final AtomicLong seqNumGenerator = new AtomicLong(INITIAL_SEQ_NUM);
-    
-    // Map to track outgoing messages that haven't been acknowledged
-    private final Map<Long, MessageRecord> pendingAcks = new ConcurrentHashMap<>();
-    
-    // Map to track received message sequence numbers to avoid processing duplicates
+    // Map to track processed messages (to avoid duplicate processing)
     private final Map<Long, Boolean> processedMessages = new ConcurrentHashMap<>();
     
+    @Autowired
+    public MessageTrackingService(MessageLogRepository messageLogRepository) {
+        this.messageLogRepository = messageLogRepository;
+    }
+    
     /**
-     * Get the next sequence number for an outgoing message.
-     * 
-     * @return the next sequence number
+     * Get the next sequential message number
      */
     public long getNextSeqNum() {
-        return seqNumGenerator.getAndIncrement();
+        return sequenceNumber.incrementAndGet();
     }
     
     /**
-     * Record an outgoing message waiting for acknowledgment.
-     * 
-     * @param seqNum the sequence number of the message
-     * @param messageType the type of message sent
-     * @return the recorded message
+     * Record an outgoing message to Amazon
      */
-    public MessageRecord recordOutgoingMessage(long seqNum, String messageType) {
-        MessageRecord record = new MessageRecord(seqNum, messageType, Instant.now());
-        pendingAcks.put(seqNum, record);
-        logger.debug("Recorded outgoing message: {} with seq_num: {}", messageType, seqNum);
-        return record;
+    public void recordOutgoingMessage(long seqNum, String messageType) {
+        MessageLog log = new MessageLog();
+        log.setSeqNum(seqNum);
+        log.setMessageType(messageType);
+        log.setDirection("OUTGOING");
+        log.setTimestamp(Instant.now());
+        
+        messageLogRepository.save(log);
+        logger.debug("Recorded outgoing message: type={}, seq={}", messageType, seqNum);
     }
     
     /**
-     * Process an acknowledgment received from Amazon.
-     * 
-     * @param ackNum the acknowledgment number
-     * @return true if the acknowledgment was for a pending message, false otherwise
+     * Record an incoming message from Amazon
      */
-    public boolean processAcknowledgment(long ackNum) {
-        MessageRecord record = pendingAcks.remove(ackNum);
-        if (record != null) {
-            logger.debug("Received acknowledgment for message: {} with seq_num: {}", 
-                    record.messageType, ackNum);
+    public void recordIncomingMessage(long seqNum, String messageType) {
+        MessageLog log = new MessageLog();
+        log.setSeqNum(seqNum);
+        log.setMessageType(messageType);
+        log.setDirection("INCOMING");
+        log.setTimestamp(Instant.now());
+        
+        messageLogRepository.save(log);
+        logger.debug("Recorded incoming message: type={}, seq={}", messageType, seqNum);
+    }
+    
+    /**
+     * Mark a message as acknowledged
+     */
+    public boolean acknowledgeMessage(long seqNum) {
+        MessageLog log = messageLogRepository.findBySeqNum(seqNum);
+        if (log != null) {
+            log.setAcknowledged(Instant.now());
+            messageLogRepository.save(log);
+            logger.debug("Acknowledged message with seqNum: {}", seqNum);
             return true;
-        } else {
-            logger.warn("Received acknowledgment for unknown seq_num: {}", ackNum);
-            return false;
         }
+        
+        logger.warn("Tried to acknowledge unknown message with seqNum: {}", seqNum);
+        return false;
     }
     
     /**
-     * Check if a received message has already been processed.
-     * 
-     * @param seqNum the sequence number to check
-     * @return true if the message has already been processed, false otherwise
+     * Get all unacknowledged outgoing messages
      */
-    public boolean isMessageProcessed(long seqNum) {
+    public List<MessageLog> getUnacknowledgedMessages() {
+        return messageLogRepository.findByAcknowledgedIsNullAndDirection("OUTGOING");
+    }
+    
+    /**
+     * Check if a message has already been processed to avoid duplicate processing
+     * @param seqNum The sequence number to check
+     * @return true if the message has already been processed
+     */
+    public boolean isMessageProcessed(Long seqNum) {
         return processedMessages.containsKey(seqNum);
     }
     
     /**
-     * Mark a received message as processed.
-     * 
-     * @param seqNum the sequence number of the processed message
-     * @param messageType the type of message processed
+     * Mark a message as processed to avoid duplicate processing
+     * @param seqNum The sequence number of the processed message
+     * @param messageType The type of message processed
      */
-    public void markMessageProcessed(long seqNum, String messageType) {
+    public void markMessageProcessed(Long seqNum, String messageType) {
         processedMessages.put(seqNum, Boolean.TRUE);
         logger.debug("Marked message as processed: {} with seq_num: {}", messageType, seqNum);
-    }
-    
-    /**
-     * Get all pending messages that haven't been acknowledged.
-     * 
-     * @return a map of sequence numbers to message records
-     */
-    public Map<Long, MessageRecord> getPendingAcks() {
-        return new ConcurrentHashMap<>(pendingAcks);
+        
+        // Also record this as an incoming message for tracking
+        recordIncomingMessage(seqNum, messageType);
     }
     
     /**
@@ -109,39 +121,14 @@ public class MessageTrackingService {
     public void cleanupOldRecords(int maxAgeMinutes) {
         Instant cutoff = Instant.now().minusSeconds(maxAgeMinutes * 60L);
         
-        // Clean up old pending acknowledgments
-        pendingAcks.entrySet().removeIf(entry -> 
-            entry.getValue().timestamp.isBefore(cutoff));
+        // Find old records in the repository and delete them
+        List<MessageLog> oldLogs = messageLogRepository.findAll().stream()
+                .filter(log -> log.getTimestamp().isBefore(cutoff) && log.getAcknowledged() != null)
+                .toList();
         
-        // For now, we're keeping processed message records indefinitely
-        // In a production system, you might want to clean these up as well
-        // or use a time-based cache like Caffeine
-    }
-    
-    /**
-     * Record class to store information about outgoing messages.
-     */
-    public static class MessageRecord {
-        private final long seqNum;
-        private final String messageType;
-        private final Instant timestamp;
-        
-        public MessageRecord(long seqNum, String messageType, Instant timestamp) {
-            this.seqNum = seqNum;
-            this.messageType = messageType;
-            this.timestamp = timestamp;
-        }
-        
-        public long getSeqNum() {
-            return seqNum;
-        }
-        
-        public String getMessageType() {
-            return messageType;
-        }
-        
-        public Instant getTimestamp() {
-            return timestamp;
+        if (!oldLogs.isEmpty()) {
+            messageLogRepository.deleteAll(oldLogs);
+            logger.info("Cleaned up {} old message logs", oldLogs.size());
         }
     }
 }

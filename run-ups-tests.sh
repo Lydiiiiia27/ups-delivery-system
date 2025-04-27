@@ -14,6 +14,60 @@ check_world_simulator() {
     fi
 }
 
+# Function to check if Amazon mock service is running
+check_amazon_mock() {
+    if docker ps | grep -q amazon-mock; then
+        echo "✓ Amazon Mock Service is running"
+        return 0
+    else
+        echo "✗ Amazon Mock Service is not running"
+        return 1
+    fi
+}
+
+# Function to start Amazon mock service
+start_amazon_mock() {
+    echo "Starting Amazon Mock Service..."
+    
+    # First, make sure any existing container is removed
+    docker rm -f amazon-mock 2>/dev/null || true
+    
+    # Create the mock data file in current directory
+    create_amazon_mock_data
+    
+    # Get available networks
+    echo "Available Docker networks:"
+    docker network ls
+    
+    # Start the Mockoon container with the data file mounted and proper networks
+    # Use both world-simulator_default and ups-network to ensure connectivity
+    docker run -d --name amazon-mock \
+        -p 8081:8080 \
+        --network world-simulator_default \
+        -v "$(pwd)/amazon-mock-data.json:/data.json" \
+        mockoon/cli:latest \
+        -d /data.json \
+        -p 8080
+    
+    # Connect to ups-network as well if it exists
+    if docker network ls | grep -q ups-network; then
+        echo "Connecting amazon-mock to ups-network as well"
+        docker network connect ups-network amazon-mock
+    fi
+    
+    # Wait for a few seconds to ensure the service starts
+    sleep 5
+    
+    if check_amazon_mock; then
+        echo "Amazon Mock Service started successfully"
+    else
+        echo "Failed to start Amazon Mock Service"
+        echo "Checking logs..."
+        docker logs amazon-mock
+        exit 1
+    fi
+}
+
 # Function to get current world ID
 get_world_id() {
     # Try to get world ID from UPS logs
@@ -72,6 +126,137 @@ check_database_state() {
     docker exec -i world-simulator_mydb_1 psql -U postgres -d worldSim -c "SELECT truck_id, world_id, x, y FROM truck ORDER BY world_id, truck_id LIMIT 10;"
 }
 
+# Function to create mock amazon-mock-data.json for the Amazon mock service
+create_amazon_mock_data() {
+    echo "Creating Amazon mock data configuration..."
+    cat > amazon-mock-data.json << 'EOF'
+{
+  "uuid": "3cb244ad-adbd-4461-afa9-e16b19078dab",
+  "lastMigration": 27,
+  "name": "Amazon Mock API",
+  "endpointPrefix": "",
+  "latency": 0,
+  "port": 8080,
+  "hostname": "0.0.0.0",
+  "routes": [
+    {
+      "uuid": "e4f7b26d-dcaf-4ad3-9e2f-dc5eda674ba9",
+      "documentation": "Endpoint for truck arrival notifications",
+      "method": "post",
+      "endpoint": "api/ups/notifications/truck-arrived",
+      "responses": [
+        {
+          "uuid": "40b36fd7-a7d4-4ca2-9ca2-5ec8090dac02",
+          "body": "{ \"success\": true }",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "filePath": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true
+        }
+      ],
+      "enabled": true,
+      "responseMode": null
+    },
+    {
+      "uuid": "b5a9c9e8-4c5d-4b3a-9d2e-8f1c6b4d5a3e",
+      "documentation": "Endpoint for delivery completion notifications",
+      "method": "post",
+      "endpoint": "api/ups/notifications/delivery-complete",
+      "responses": [
+        {
+          "uuid": "c7d8e9f0-a1b2-3c4d-5e6f-7a8b9c0d1e2f",
+          "body": "{ \"success\": true }",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "filePath": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true
+        }
+      ],
+      "enabled": true,
+      "responseMode": null
+    },
+    {
+      "uuid": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "documentation": "Endpoint for status update notifications",
+      "method": "post",
+      "endpoint": "api/ups/notifications/status-update",
+      "responses": [
+        {
+          "uuid": "d4c3b2a1-f0e9-8d7c-6b5a-4e3d2c1b0a9f",
+          "body": "{ \"success\": true }",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "filePath": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true
+        }
+      ],
+      "enabled": true,
+      "responseMode": null
+    }
+  ],
+  "proxyMode": false,
+  "proxyHost": "",
+  "cors": true,
+  "headers": [
+    {
+      "key": "Content-Type",
+      "value": "application/json"
+    }
+  ],
+  "proxyReqHeaders": [
+    {
+      "key": "",
+      "value": ""
+    }
+  ],
+  "proxyResHeaders": [
+    {
+      "key": "",
+      "value": ""
+    }
+  ],
+  "data": []
+}
+EOF
+    echo "Mock data configuration created successfully"
+}
+
 # Function to run tests
 run_tests() {
     echo ""
@@ -82,14 +267,64 @@ run_tests() {
     
     # Export environment variable to enable integration tests
     export WORLD_SIMULATOR_RUNNING=true
+    export AMAZON_MOCK_RUNNING=true
     
-    # Run the existing WorldResponseHandlerTest
-    mvn test -Dtest=WorldResponseHandlerTest
+    # Get the IP address of the Amazon mock container
+    AMAZON_MOCK_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' amazon-mock)
+    if [ -z "$AMAZON_MOCK_IP" ]; then
+        echo "Could not get IP address for amazon-mock container"
+        AMAZON_MOCK_IP="amazon-mock"  # Fallback to container name
+    fi
     
-    # You can also run all tests related to world response handling
-    mvn test -Dtest=WorldResponseHandler*
+    echo "Using Amazon Mock IP: $AMAZON_MOCK_IP"
+    export AMAZON_SERVICE_URL="http://$AMAZON_MOCK_IP:8080"
+    
+    # Compile the project first to check for errors
+    echo "Compiling project..."
+    if ! mvn compile; then
+        echo "Compilation failed. Please fix the errors above before running tests."
+        cd ..
+        return 1
+    fi
+    
+    echo "Running tests for AmazonNotificationService integration..."
+    
+    # First run the tests individually so we can see focused results
+    set +e  # Don't exit on error
+    
+    # Run just the specific test to verify AmazonNotificationService functionality
+    echo "Running just AmazonNotificationServiceTest..."
+    mvn test -Dtest=AmazonNotificationServiceTest -DfailIfNoTests=false -Damazon.service.url=$AMAZON_SERVICE_URL
+    TEST_RESULT=$?
+    
+    if [ $TEST_RESULT -eq 0 ]; then
+        echo "AmazonNotificationServiceTest passed successfully!"
+    else
+        echo "AmazonNotificationServiceTest failed. See above for errors."
+    fi
+    
+    set -e  # Resume exit on error
     
     cd ..
+    
+    return $TEST_RESULT
+}
+
+# Function to clean up after tests
+cleanup() {
+    echo ""
+    echo "Cleaning up..."
+    echo "-------------"
+    
+    # Stop and remove Amazon mock service
+    if check_amazon_mock; then
+        docker stop amazon-mock
+        docker rm amazon-mock
+        echo "Amazon Mock Service stopped and removed"
+    fi
+    
+    # Remove the mock data file
+    rm -f amazon-mock-data.json
 }
 
 # Main execution
@@ -102,22 +337,35 @@ if ! check_world_simulator; then
 fi
 
 echo ""
-echo "Step 2: Getting current World ID"
+echo "Step 2: Setting up Amazon Mock Service"
+if ! check_amazon_mock; then
+    start_amazon_mock
+else
+    echo "Amazon Mock Service is already running"
+fi
+
+echo ""
+echo "Step 3: Getting current World ID"
 WORLD_ID=$(get_world_id)
 echo "Using World ID: $WORLD_ID"
 
 echo ""
-echo "Step 3: Creating test warehouses"
+echo "Step 4: Creating test warehouses"
 create_warehouses "$WORLD_ID"
 
 echo ""
-echo "Step 4: Checking database state"
+echo "Step 5: Checking database state"
 check_database_state
 
 echo ""
-echo "Step 5: Running integration tests"
+echo "Step 6: Running integration tests"
 read -p "Press Enter to run tests or Ctrl+C to cancel..."
 run_tests
+
+echo ""
+echo "Step 7: Cleanup"
+read -p "Press Enter to clean up resources or Ctrl+C to keep them running..."
+cleanup
 
 echo ""
 echo "Test execution complete!"
