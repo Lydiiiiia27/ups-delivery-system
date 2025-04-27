@@ -34,9 +34,9 @@ public class WorldConnectorTestHelper {
      */
     public Long setupTestWorld(String host, int port, List<Truck> trucks) {
         try {
-            // Use the provided trucks list instead of calling createTestTrucks()
-            WorldConnector connector = new WorldConnector(host, port, trucks, responseListener);
-            return connector.getWorldId();
+            // Use the autowired worldConnector instance to connect
+            worldConnector.connect(host, port, trucks, true, null);
+            return worldConnector.getWorldId();
         } catch (Exception e) {
             logger.error("Failed to set up test world: {}", e.getMessage());
             throw new RuntimeException("Failed to set up test world", e);

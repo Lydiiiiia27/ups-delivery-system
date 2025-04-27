@@ -1,8 +1,14 @@
 package com.ups.service.impl;
 
-import com.ups.model.CreateShipmentRequest;
-import com.ups.model.CreateShipmentResponse;
-import com.ups.model.entity.*;
+import com.ups.model.amazon.CreateShipmentRequest;
+import com.ups.model.amazon.CreateShipmentResponse;
+import com.ups.model.entity.Package;
+import com.ups.model.entity.PackageItem;
+import com.ups.model.entity.PackageStatus;
+import com.ups.model.entity.Truck;
+import com.ups.model.entity.TruckStatus;
+import com.ups.model.entity.User;
+import com.ups.model.entity.Warehouse;
 import com.ups.repository.PackageItemRepository;
 import com.ups.repository.PackageRepository;
 import com.ups.repository.TruckRepository;
@@ -89,8 +95,8 @@ public class ShipmentServiceImpl implements ShipmentService {
             if (truckOpt.isPresent()) {
                 Truck truck = truckOpt.get();
                 
-                // 4. Create package entity - explicitly use fully qualified name to avoid ambiguity
-                com.ups.model.entity.Package pkg = new com.ups.model.entity.Package();
+                // 4. Create package entity
+                Package pkg = new Package();
                 pkg.setId(request.getShipmentInfo().getPackageId());
                 pkg.setWarehouse(warehouse);
                 pkg.setUser(user);

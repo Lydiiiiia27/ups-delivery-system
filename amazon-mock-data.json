@@ -1,0 +1,123 @@
+{
+  "uuid": "3cb244ad-adbd-4461-afa9-e16b19078dab",
+  "lastMigration": 27,
+  "name": "Amazon Mock API",
+  "endpointPrefix": "",
+  "latency": 0,
+  "port": 8080,
+  "hostname": "0.0.0.0",
+  "routes": [
+    {
+      "uuid": "e4f7b26d-dcaf-4ad3-9e2f-dc5eda674ba9",
+      "documentation": "Endpoint for truck arrival notifications",
+      "method": "post",
+      "endpoint": "api/ups/notifications/truck-arrived",
+      "responses": [
+        {
+          "uuid": "40b36fd7-a7d4-4ca2-9ca2-5ec8090dac02",
+          "body": "{ \"success\": true }",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "filePath": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true
+        }
+      ],
+      "enabled": true,
+      "responseMode": null
+    },
+    {
+      "uuid": "b5a9c9e8-4c5d-4b3a-9d2e-8f1c6b4d5a3e",
+      "documentation": "Endpoint for delivery completion notifications",
+      "method": "post",
+      "endpoint": "api/ups/notifications/delivery-complete",
+      "responses": [
+        {
+          "uuid": "c7d8e9f0-a1b2-3c4d-5e6f-7a8b9c0d1e2f",
+          "body": "{ \"success\": true }",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "filePath": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true
+        }
+      ],
+      "enabled": true,
+      "responseMode": null
+    },
+    {
+      "uuid": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "documentation": "Endpoint for status update notifications",
+      "method": "post",
+      "endpoint": "api/ups/notifications/status-update",
+      "responses": [
+        {
+          "uuid": "d4c3b2a1-f0e9-8d7c-6b5a-4e3d2c1b0a9f",
+          "body": "{ \"success\": true }",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "filePath": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true
+        }
+      ],
+      "enabled": true,
+      "responseMode": null
+    }
+  ],
+  "proxyMode": false,
+  "proxyHost": "",
+  "cors": true,
+  "headers": [
+    {
+      "key": "Content-Type",
+      "value": "application/json"
+    }
+  ],
+  "proxyReqHeaders": [
+    {
+      "key": "",
+      "value": ""
+    }
+  ],
+  "proxyResHeaders": [
+    {
+      "key": "",
+      "value": ""
+    }
+  ],
+  "data": []
+}

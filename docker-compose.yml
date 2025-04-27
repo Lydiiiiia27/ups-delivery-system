@@ -13,6 +13,34 @@ services:
     networks:
       - ups-network
 
+  # World Simulator Database - renamed to mydb as expected by world-simulator
+  mydb:
+    image: postgres:12-alpine3.15
+    container_name: mydb
+    environment:
+      POSTGRES_PASSWORD: abc123
+      POSTGRES_USER: postgres
+      POSTGRES_DB: worldSim
+    networks:
+      - world-network
+    volumes:
+      - world-data:/var/lib/postgresql/data
+
+  # World Simulator
+  world-simulator:
+    build:
+      context: ./ups-delivery-system/world-simulator
+      dockerfile: Dockerfile
+    container_name: world-simulator
+    depends_on:
+      - mydb
+    command: bash -c "./wait-for-it.sh mydb:5432 --strict -- ./server 12345 23456 0"
+    ports:
+      - "12345:12345"
+      - "23456:23456"
+    networks:
+      - world-network
+
   # UPS application
   ups-app:
     build:
@@ -46,34 +74,6 @@ services:
         ./wait-for-it.sh world-simulator:12345 --timeout=30 --strict -- 
         java -jar app.jar
       "
-
-  # World Simulator
-  world-simulator:
-    build:
-      context: ./ups-delivery-system/world-simulator
-      dockerfile: Dockerfile
-    container_name: world-simulator
-    depends_on:
-      - world-db
-    command: bash -c "./wait-for-it.sh world-db:5432 --strict -- ./server 12345 23456 0"
-    ports:
-      - "12345:12345"
-      - "23456:23456"
-    networks:
-      - world-network
-
-  # World Simulator Database
-  world-db:
-    image: postgres:12-alpine3.15
-    container_name: world-db
-    environment:
-      POSTGRES_PASSWORD: abc123
-      POSTGRES_USER: postgres
-      POSTGRES_DB: worldSim
-    networks:
-      - world-network
-    volumes:
-      - world-data:/var/lib/postgresql/data
 
 networks:
   ups-network:

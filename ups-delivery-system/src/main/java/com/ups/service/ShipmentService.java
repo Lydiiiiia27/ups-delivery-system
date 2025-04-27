@@ -1,7 +1,8 @@
+// ups-delivery-system/src/main/java/com/ups/service/ShipmentService.java
 package com.ups.service;
 
-import com.ups.model.CreateShipmentRequest;
-import com.ups.model.CreateShipmentResponse;
+import com.ups.model.amazon.CreateShipmentRequest;
+import com.ups.model.amazon.CreateShipmentResponse;
 
 /**
  * Service interface for handling shipment-related operations

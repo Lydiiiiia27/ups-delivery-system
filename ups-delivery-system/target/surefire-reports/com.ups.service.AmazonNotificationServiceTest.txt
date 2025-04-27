@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.ups.service.AmazonNotificationServiceTest
 -------------------------------------------------------------------------------
-Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 15.444 s - in com.ups.service.AmazonNotificationServiceTest
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 11.515 s - in com.ups.service.AmazonNotificationServiceTest

@@ -1,164 +1,54 @@
-package com.ups.service.impl;
+package com.ups.config;
 
-import com.ups.model.amazon.CreateShipmentRequest;
-import com.ups.model.amazon.CreateShipmentResponse;
-import com.ups.model.entity.*;
-import com.ups.repository.PackageItemRepository;
-import com.ups.repository.PackageRepository;
-import com.ups.repository.TruckRepository;
-import com.ups.repository.UserRepository;
-import com.ups.repository.WarehouseRepository;
-import com.ups.service.ShipmentService;
-import com.ups.service.world.Ups;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
 
-import java.time.Instant;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
-
-/**
- * Implementation of the ShipmentService interface
- */
-@Service
-public class ShipmentServiceImpl implements ShipmentService {
+@Configuration
+public class SecurityConfig {
     
-    private static final Logger logger = LoggerFactory.getLogger(ShipmentServiceImpl.class);
-    private static final AtomicLong nextSeqNum = new AtomicLong(200);
-    
-    private final PackageRepository packageRepository;
-    private final PackageItemRepository packageItemRepository;
-    private final UserRepository userRepository;
-    private final TruckRepository truckRepository;
-    private final WarehouseRepository warehouseRepository;
-    private final Ups ups;
-    
-    @Autowired
-    public ShipmentServiceImpl(
-            PackageRepository packageRepository,
-            PackageItemRepository packageItemRepository,
-            UserRepository userRepository,
-            TruckRepository truckRepository,
-            WarehouseRepository warehouseRepository,
-            Ups ups) {
-        this.packageRepository = packageRepository;
-        this.packageItemRepository = packageItemRepository;
-        this.userRepository = userRepository;
-        this.truckRepository = truckRepository;
-        this.warehouseRepository = warehouseRepository;
-        this.ups = ups;
-    }
-    
-    @Override
-    @Transactional
-    public CreateShipmentResponse processShipmentRequest(CreateShipmentRequest request) {
-        logger.info("Processing shipment request for package ID: {}", 
-                request.getShipmentInfo().getPackageId());
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http, HandlerMappingIntrospector introspector) throws Exception {
+        MvcRequestMatcher.Builder mvcMatcherBuilder = new MvcRequestMatcher.Builder(introspector);
         
-        CreateShipmentResponse response = new CreateShipmentResponse();
-        response.setMessageType("CreateShipmentResponse");
-        response.setSeqNum(nextSeqNum.getAndIncrement());
-        response.setAck(request.getSeqNum());
-        response.setTimestamp(Instant.now());
-        
-        try {
-            // 1. Find or create warehouse
-            Warehouse warehouse = findOrCreateWarehouse(
-                request.getShipmentInfo().getWarehouseId(),
-                request.getShipmentInfo().getDestination().getX(),
-                request.getShipmentInfo().getDestination().getY()
+        http
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(mvcMatcherBuilder.pattern("/api/**")).permitAll()
+                .requestMatchers(mvcMatcherBuilder.pattern("/")).permitAll()
+                .requestMatchers(mvcMatcherBuilder.pattern("/register")).permitAll()
+                .requestMatchers(mvcMatcherBuilder.pattern("/login")).permitAll()
+                .requestMatchers(mvcMatcherBuilder.pattern("/tracking")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/h2-console/**")).permitAll()
+                .anyRequest().authenticated()
+            )
+            .formLogin(form -> form
+                .loginPage("/login")
+                .defaultSuccessUrl("/dashboard", true)
+                .permitAll()
+            )
+            .logout(logout -> logout
+                .logoutSuccessUrl("/login?logout")
+                .permitAll()
+            )
+            .csrf(csrf -> csrf
+                .ignoringRequestMatchers(new AntPathRequestMatcher("/api/**"))
+                .ignoringRequestMatchers(new AntPathRequestMatcher("/h2-console/**"))
+            )
+            .headers(headers -> headers
+                .frameOptions(frame -> frame.disable())  // For H2 console
             );
-            
-            // 2. Find user if ups_account_name is provided
-            User user = null;
-            if (request.getShipmentInfo().getUpsAccountName() != null && 
-                !request.getShipmentInfo().getUpsAccountName().isEmpty()) {
-                Optional<User> userOpt = userRepository.findByUsername(
-                        request.getShipmentInfo().getUpsAccountName());
-                user = userOpt.orElse(null);
-                
-                if (user == null) {
-                    logger.warn("UPS account name provided but user not found: {}", 
-                            request.getShipmentInfo().getUpsAccountName());
-                }
-            }
-            
-            // 3. Find available truck
-            Optional<Truck> truckOpt = truckRepository.findByStatus(TruckStatus.IDLE).stream().findFirst();
-            
-            if (truckOpt.isPresent()) {
-                Truck truck = truckOpt.get();
-                
-                // 4. Create package entity
-                Package pkg = new Package();
-                pkg.setId(request.getShipmentInfo().getPackageId());
-                pkg.setWarehouse(warehouse);
-                pkg.setUser(user);
-                pkg.setDestinationX(request.getShipmentInfo().getDestination().getX());
-                pkg.setDestinationY(request.getShipmentInfo().getDestination().getY());
-                pkg.setStatus(PackageStatus.CREATED);
-                pkg.setTruck(truck);
-                
-                // 5. Save package
-                packageRepository.save(pkg);
-                
-                // 6. Add items to package
-                if (request.getShipmentInfo().getItems() != null) {
-                    for (CreateShipmentRequest.ShipmentInfo.Item item : request.getShipmentInfo().getItems()) {
-                        PackageItem packageItem = new PackageItem();
-                        packageItem.setProductId(item.getProductId());
-                        packageItem.setDescription(item.getDescription());
-                        packageItem.setCount(item.getCount());
-                        packageItem.setPkg(pkg);
-                        packageItemRepository.save(packageItem);
-                    }
-                }
-                
-                // 7. Update truck status and send it to the warehouse
-                truck.setStatus(TruckStatus.TRAVELING);
-                truckRepository.save(truck);
-                
-                // 8. Send truck to pick up package
-                ups.sendTruckToPickup(truck.getId(), warehouse.getId());
-                
-                // 9. Set response
-                response.setStatus("ACCEPTED");
-                response.setTruckId(truck.getId());
-                
-                logger.info("Shipment request accepted for package ID: {} with truck ID: {}", 
-                        pkg.getId(), truck.getId());
-            } else {
-                response.setStatus("REJECTED");
-                response.setError("No available trucks");
-                logger.warn("Shipment request rejected: No available trucks");
-            }
-        } catch (Exception e) {
-            response.setStatus("REJECTED");
-            response.setError("Error processing shipment: " + e.getMessage());
-            logger.error("Error processing shipment request", e);
-        }
         
-        return response;
+        return http.build();
     }
     
-    /**
-     * Find or create a warehouse with the given ID
-     * @param warehouseId The warehouse ID
-     * @param x The X coordinate of the warehouse
-     * @param y The Y coordinate of the warehouse
-     * @return The warehouse
-     */
-    private Warehouse findOrCreateWarehouse(Integer warehouseId, Integer x, Integer y) {
-        return warehouseRepository.findById(warehouseId)
-                .orElseGet(() -> {
-                    Warehouse newWarehouse = new Warehouse();
-                    newWarehouse.setId(warehouseId);
-                    newWarehouse.setX(x);
-                    newWarehouse.setY(y);
-                    return warehouseRepository.save(newWarehouse);
-                });
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
     }
 }

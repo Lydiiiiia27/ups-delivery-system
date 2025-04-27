@@ -5,7 +5,7 @@ echo "==========================================="
 
 # Function to check if World Simulator is running
 check_world_simulator() {
-    if docker ps | grep -q world-simulator; then
+    if docker ps --format '{{.Names}}' | grep -q "^world-simulator$"; then
         echo "✓ World Simulator is running"
         return 0
     else
@@ -16,13 +16,58 @@ check_world_simulator() {
 
 # Function to check if Amazon mock service is running
 check_amazon_mock() {
-    if docker ps | grep -q amazon-mock; then
+    if docker ps --format '{{.Names}}' | grep -q "^amazon-mock$"; then
         echo "✓ Amazon Mock Service is running"
         return 0
     else
         echo "✗ Amazon Mock Service is not running"
         return 1
     fi
+}
+
+# Function to check if UPS app is running
+check_ups_app() {
+    if docker ps --format '{{.Names}}' | grep -q "^ups-app$"; then
+        echo "✓ UPS Application is running"
+        return 0
+    else
+        echo "✗ UPS Application is not running"
+        return 1
+    fi
+}
+
+# Function to check container health
+check_container_health() {
+    local container_name=$1
+    local max_attempts=30
+    local attempt=1
+    
+    echo "Checking health of $container_name..."
+    
+    while [ $attempt -le $max_attempts ]; do
+        if docker ps --format '{{.Names}}' | grep -q "^$container_name$"; then
+            local status=$(docker inspect --format='{{.State.Status}}' $container_name 2>/dev/null)
+            if [ "$status" = "running" ]; then
+                # For Mockoon, we need to check if it's actually responding
+                if [ "$container_name" = "amazon-mock" ]; then
+                    if curl -s http://localhost:8081/api/ups/notifications/truck-arrived > /dev/null; then
+                        echo "✓ $container_name is healthy and running"
+                        return 0
+                    fi
+                else
+                    echo "✓ $container_name is healthy and running"
+                    return 0
+                fi
+            fi
+        fi
+        
+        echo "Attempt $attempt/$max_attempts: $container_name not ready yet..."
+        sleep 2
+        attempt=$((attempt + 1))
+    done
+    
+    echo "✗ $container_name failed to become healthy"
+    return 1
 }
 
 # Function to start Amazon mock service
@@ -39,26 +84,28 @@ start_amazon_mock() {
     echo "Available Docker networks:"
     docker network ls
     
+    # Use the exact network names from your environment
+    WORLD_NETWORK="erss-project-ys467-jt454_world-network"
+    UPS_NETWORK="erss-project-ys467-jt454_ups-network"
+    
+    echo "Using network: $WORLD_NETWORK"
+    
     # Start the Mockoon container with the data file mounted and proper networks
     # Use world-network to ensure connectivity with simulator and UPS
     docker run -d --name amazon-mock \
         -p 8081:8080 \
-        --network world-network \
+        --network $WORLD_NETWORK \
         -v "$(pwd)/amazon-mock-data.json:/data.json" \
         mockoon/cli:latest \
         -d /data.json \
         -p 8080
     
-    # Connect to ups-network as well if it exists
-    if docker network ls | grep -q ups-network; then
-        echo "Connecting amazon-mock to ups-network as well"
-        docker network connect ups-network amazon-mock
-    fi
+    # Connect to ups-network as well
+    echo "Connecting amazon-mock to $UPS_NETWORK as well"
+    docker network connect $UPS_NETWORK amazon-mock
     
-    # Wait for a few seconds to ensure the service starts
-    sleep 5
-    
-    if check_amazon_mock; then
+    # Wait for the service to become healthy
+    if check_container_health "amazon-mock"; then
         echo "Amazon Mock Service started successfully"
     else
         echo "Failed to start Amazon Mock Service"
@@ -71,11 +118,11 @@ start_amazon_mock() {
 # Function to get current world ID
 get_world_id() {
     # Try to get world ID from UPS logs
-    WORLD_ID=$(docker logs ups-app 2>&1 | grep "Connected to existing world with ID" | tail -1 | awk '{print $NF}')
+    WORLD_ID=$(docker logs ups-app 2>&1 | grep "Connected to" | grep "world ID" | tail -1 | sed -n 's/.*world ID: \([0-9]\+\).*/\1/p')
     
     # If not found, try to get it from the database
     if [ -z "$WORLD_ID" ]; then
-        WORLD_ID=$(docker exec -i world-db psql -U postgres -d worldSim -t -c "SELECT world_id FROM world ORDER BY world_id DESC LIMIT 1;" | tr -d ' ')
+        WORLD_ID=$(docker exec -i mydb psql -U postgres -d worldSim -t -c "SELECT world_id FROM world ORDER BY world_id DESC LIMIT 1;" | tr -d ' ')
     fi
     
     # Default to 1 if still not found
@@ -91,7 +138,7 @@ create_warehouses() {
     local world_id=$1
     echo "Creating warehouses in World ID: $world_id"
     
-    docker exec -i world-db psql -U postgres -d worldSim <<EOF
+    docker exec -i mydb psql -U postgres -d worldSim <<EOF
 -- Create warehouses for testing
 INSERT INTO warehouse (wh_id, world_id, x, y)
 VALUES 
@@ -113,17 +160,17 @@ check_database_state() {
     
     # Check worlds - Use the actual column names in your database
     echo "Worlds:"
-    docker exec -i world-db psql -U postgres -d worldSim -c "SELECT world_id FROM world;"
+    docker exec -i mydb psql -U postgres -d worldSim -c "SELECT world_id FROM world;" || echo "No worlds found or table doesn't exist"
     
     # Check warehouses
     echo ""
     echo "Warehouses:"
-    docker exec -i world-db psql -U postgres -d worldSim -c "SELECT wh_id, world_id, x, y FROM warehouse ORDER BY world_id, wh_id;"
+    docker exec -i mydb psql -U postgres -d worldSim -c "SELECT wh_id, world_id, x, y FROM warehouse ORDER BY world_id, wh_id;" || echo "No warehouses found or table doesn't exist"
     
     # Check trucks - Use the actual column names in your database
     echo ""
     echo "Trucks:"
-    docker exec -i world-db psql -U postgres -d worldSim -c "SELECT truck_id, world_id, x, y FROM truck ORDER BY world_id, truck_id LIMIT 10;"
+    docker exec -i mydb psql -U postgres -d worldSim -c "SELECT truck_id, world_id, x, y FROM truck ORDER BY world_id, truck_id LIMIT 10;" || echo "No trucks found or table doesn't exist"
 }
 
 # Function to create mock amazon-mock-data.json for the Amazon mock service
@@ -270,7 +317,8 @@ run_tests() {
     export AMAZON_MOCK_RUNNING=true
     
     # Get the IP address of the Amazon mock container
-    AMAZON_MOCK_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' amazon-mock)
+    # Try different methods to get the IP
+    AMAZON_MOCK_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' amazon-mock | head -1)
     if [ -z "$AMAZON_MOCK_IP" ]; then
         echo "Could not get IP address for amazon-mock container"
         AMAZON_MOCK_IP="amazon-mock"  # Fallback to container name
@@ -335,7 +383,7 @@ cleanup() {
     rm -f amazon-mock-data.json
 }
 
-# Function to check if the whole environment is running (optional, can start it if needed)
+# Function to check if the whole environment is running
 check_environment() {
     echo "Checking if Docker environment is running..."
     
@@ -344,17 +392,35 @@ check_environment() {
         exit 1
     fi
     
-    # Check if ups-app is running
-    if ! docker ps | grep -q ups-app; then
-        echo "UPS application is not running."
-        read -p "Do you want to start the entire environment? (y/n): " answer
+    # Check all required services
+    local services_to_check=("ups-app" "world-simulator" "mydb" "ups-db")
+    local all_services_running=true
+    
+    for service in "${services_to_check[@]}"; do
+        if ! docker ps --format '{{.Names}}' | grep -q "^$service$"; then
+            echo "$service is not running."
+            all_services_running=false
+        fi
+    done
+    
+    if [ "$all_services_running" = false ]; then
+        read -p "Some services are not running. Do you want to start the entire environment? (y/n): " answer
         if [ "$answer" = "y" ]; then
+            echo "Stopping all existing containers..."
+            docker-compose down
+            
             echo "Starting the entire environment..."
             docker-compose up -d
+            
             echo "Waiting for services to initialize..."
-            sleep 15
+            for service in "${services_to_check[@]}"; do
+                check_container_health "$service"
+            done
+            
+            echo "Waiting additional time for services to fully initialize..."
+            sleep 10
         else
-            echo "Test environment requires ups-app to be running. Exiting."
+            echo "Test environment requires all services to be running. Exiting."
             exit 1
         fi
     fi
@@ -367,8 +433,14 @@ check_environment
 echo ""
 echo "Step 2: Checking World Simulator status"
 if ! check_world_simulator; then
-    echo "World Simulator is not running. It should have been started as part of the environment."
-    exit 1
+    echo "Trying to restart Docker services..."
+    docker-compose down
+    docker-compose up -d
+    sleep 15
+    if ! check_world_simulator; then
+        echo "World Simulator is still not running. Please check Docker logs."
+        exit 1
+    fi
 fi
 
 echo ""

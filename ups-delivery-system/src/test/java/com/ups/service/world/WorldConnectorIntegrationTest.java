@@ -79,18 +79,16 @@ public class WorldConnectorIntegrationTest {
         // Test the pickup functionality
         int truckId = testTrucks.get(0).getId();
         int warehouseId = 1; // Assuming warehouse with ID 1 exists in the simulator
-        long seqNum = worldConnector.getNextSeqNum();
         
         // Send a pickup command
-        worldConnector.pickup(truckId, warehouseId, seqNum);
+        worldConnector.pickup(truckId, warehouseId);
         
         // Test the delivery functionality
         long packageId = 1001; // This would be created by Amazon and loaded onto the truck
         Location destination = new Location(5, 10);
-        seqNum = worldConnector.getNextSeqNum();
         
         // Send a delivery command
-        worldConnector.deliver(truckId, packageId, destination, seqNum);
+        worldConnector.deliver(truckId, packageId, destination);
         
         // In a real test, you'd verify that the responses were correct
         // For simplicity, we're just testing that the calls don't throw exceptions
