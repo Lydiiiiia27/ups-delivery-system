@@ -1,6 +1,9 @@
+/home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/test/java/com/ups/WorldSimulatorTestCLI.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/test/java/com/ups/service/world/WorldConnectorIntegrationTest.java
+/home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/test/java/com/ups/service/world/WorldSimulatorWarehouseAwareIntegrationTest.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/test/java/com/ups/helper/WorldConnectorTestHelper.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/test/java/com/ups/controller/AmazonApiControllerTest.java
+/home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/test/java/com/ups/service/world/WorldSimulatorLiveIntegrationTest.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/test/java/com/ups/service/world/WorldResponseHandlerTest.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/test/java/com/ups/service/world/WorldResponseHandlingIntegrationTest.java
 /home/jt454/erss-project-ys467-jt454/ups-delivery-system/src/test/java/com/ups/AppTest.java

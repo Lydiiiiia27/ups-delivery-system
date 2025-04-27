@@ -67,7 +67,23 @@ public class Ups {
             }
             
             // Connect to world simulator with response listener
-            this.worldConnector = new WorldConnector(worldHost, worldPort, trucks, responseListener);
+            try {
+                this.worldConnector = new WorldConnector(worldHost, worldPort, trucks, responseListener);
+                
+                // Set simulation speed
+                worldConnector.setSimulationSpeed(worldSimSpeed);
+                
+                logger.info("Connected to world simulator at {}:{} with world ID: {}", 
+                        worldHost, worldPort, worldConnector.getWorldId());
+            } catch (IOException e) {
+                logger.error("Failed to connect to world simulator: {}", e.getMessage());
+                // In test environments, continue without world connection
+                if (isTestEnvironment()) {
+                    logger.warn("Running in test environment - continuing without world connection");
+                } else {
+                    throw e; // Re-throw in production environment
+                }
+            }
             
             // Start the response handler in a separate thread
             CompletableFuture.runAsync(() -> {
@@ -76,14 +92,8 @@ public class Ups {
                 logger.error("Response handler thread failed", ex);
                 return null;
             });
-            
-            // Set simulation speed
-            worldConnector.setSimulationSpeed(worldSimSpeed);
-            
-            logger.info("Connected to world simulator at {}:{} with world ID: {}", 
-                    worldHost, worldPort, worldConnector.getWorldId());
         } catch (IOException e) {
-            logger.error("Failed to connect to world simulator: {}", e.getMessage(), e);
+            logger.error("Failed to initialize UPS service: {}", e.getMessage(), e);
         }
     }
     
@@ -128,9 +138,13 @@ public class Ups {
                 truck.setStatus(TruckStatus.TRAVELING);
                 truckRepository.save(truck);
                 
-                // Send command to world simulator
-                worldConnector.pickup(truckId, warehouseId, worldConnector.getNextSeqNum());
-                logger.info("Sent truck {} to warehouse {}", truckId, warehouseId);
+                // Send command to world simulator if connected
+                if (worldConnector != null && worldConnector.isConnected()) {
+                    worldConnector.pickup(truckId, warehouseId, worldConnector.getNextSeqNum());
+                    logger.info("Sent truck {} to warehouse {}", truckId, warehouseId);
+                } else {
+                    logger.warn("Not connected to world simulator. Database updated but command not sent.");
+                }
             } else {
                 logger.error("Truck with ID {} not found", truckId);
             }
@@ -161,10 +175,14 @@ public class Ups {
                 pkg.setTruck(truck);
                 packageRepository.save(pkg);
                 
-                // Send command to world simulator
-                worldConnector.deliver(truckId, packageId, destination, worldConnector.getNextSeqNum());
-                logger.info("Sent truck {} to deliver package {} to ({},{})", 
-                        truckId, packageId, destination.getX(), destination.getY());
+                // Send command to world simulator if connected
+                if (worldConnector != null && worldConnector.isConnected()) {
+                    worldConnector.deliver(truckId, packageId, destination, worldConnector.getNextSeqNum());
+                    logger.info("Sent truck {} to deliver package {} to ({},{})", 
+                            truckId, packageId, destination.getX(), destination.getY());
+                } else {
+                    logger.warn("Not connected to world simulator. Database updated but command not sent.");
+                }
             } else {
                 if (!truckOpt.isPresent()) {
                     logger.error("Truck with ID {} not found", truckId);
@@ -183,8 +201,12 @@ public class Ups {
         try {
             Optional<Truck> truckOpt = truckRepository.findById(truckId);
             if (truckOpt.isPresent()) {
-                worldConnector.query(truckId, worldConnector.getNextSeqNum());
-                logger.info("Queried status for truck {}", truckId);
+                if (worldConnector != null && worldConnector.isConnected()) {
+                    worldConnector.query(truckId, worldConnector.getNextSeqNum());
+                    logger.info("Queried status for truck {}", truckId);
+                } else {
+                    logger.warn("Not connected to world simulator. Query command not sent.");
+                }
             } else {
                 logger.error("Truck with ID {} not found", truckId);
             }
@@ -208,6 +230,16 @@ public class Ups {
     
     // Method for other services to get the world ID
     public Long getWorldId() {
-        return worldConnector != null ? worldConnector.getWorldId() : null;
+        return (worldConnector != null && worldConnector.isConnected()) ? worldConnector.getWorldId() : null;
+    }
+    
+    // Helper method to check if running in test environment
+    private boolean isTestEnvironment() {
+        for (String profile : System.getProperty("spring.profiles.active", "").split(",")) {
+            if (profile.trim().equals("test") || profile.trim().equals("test-cli")) {
+                return true;
+            }
+        }
+        return false;
     }
 }
