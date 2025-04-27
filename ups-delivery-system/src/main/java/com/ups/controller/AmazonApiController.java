@@ -13,6 +13,7 @@ import com.ups.model.amazon.UpdateShipmentStatus;
 import com.ups.model.amazon.UPSGeneralError;
 import com.ups.model.entity.Package;
 import com.ups.model.entity.PackageStatus;
+import com.ups.model.entity.Truck;
 import com.ups.model.entity.TruckStatus;
 import com.ups.repository.PackageRepository;
 import com.ups.service.ShipmentService;
@@ -28,7 +29,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequestMapping("/api")
@@ -39,6 +42,8 @@ public class AmazonApiController {
     private final MessageTrackingService messageTrackingService;
     private final PackageRepository packageRepository;
     private final Ups ups;
+    
+    private final Map<Long, Object> responseCache = new ConcurrentHashMap<>();
     
     @Autowired
     public AmazonApiController(ShipmentService shipmentService, 
@@ -65,13 +70,21 @@ public class AmazonApiController {
         // Check if the message has already been processed
         if (messageTrackingService.isMessageProcessed(request.getSeqNum())) {
             logger.info("Duplicate message received with seq_num: {}", request.getSeqNum());
-            // TODO: Return the cached response
+            // Return the cached response
+            Object cachedResponse = responseCache.get(request.getSeqNum());
+            if (cachedResponse != null && cachedResponse instanceof CreateShipmentResponse) {
+                logger.info("Returning cached response for message with seq_num: {}", request.getSeqNum());
+                return ResponseEntity.ok((CreateShipmentResponse) cachedResponse);
+            }
             return ResponseEntity.ok().build();
         }
         
         try {
             // Process the shipment request
             CreateShipmentResponse response = shipmentService.processShipmentRequest(request);
+            
+            // Cache the response
+            responseCache.put(request.getSeqNum(), response);
             
             // Mark the message as processed
             messageTrackingService.markMessageProcessed(request.getSeqNum(), request.getMessageType());
@@ -96,7 +109,12 @@ public class AmazonApiController {
         // Check if the message has already been processed
         if (messageTrackingService.isMessageProcessed(request.getSeqNum())) {
             logger.info("Duplicate message received with seq_num: {}", request.getSeqNum());
-            // TODO: Return the cached response
+            // Return the cached response
+            Object cachedResponse = responseCache.get(request.getSeqNum());
+            if (cachedResponse != null && cachedResponse instanceof ChangeDestinationResponse) {
+                logger.info("Returning cached response for message with seq_num: {}", request.getSeqNum());
+                return ResponseEntity.ok((ChangeDestinationResponse) cachedResponse);
+            }
             return ResponseEntity.ok().build();
         }
         
@@ -155,6 +173,9 @@ public class AmazonApiController {
                     request.getPackageId(), e.getMessage(), e);
         }
         
+        // Cache the response
+        responseCache.put(request.getSeqNum(), response);
+        
         // Mark the message as processed
         messageTrackingService.markMessageProcessed(request.getSeqNum(), request.getMessageType());
         
@@ -171,26 +192,108 @@ public class AmazonApiController {
         // Check if the message has already been processed
         if (messageTrackingService.isMessageProcessed(request.getSeqNum())) {
             logger.info("Duplicate message received with seq_num: {}", request.getSeqNum());
-            // TODO: Return the cached response
+            // Return cached response if available
+            Object cachedResponse = responseCache.get(request.getSeqNum());
+            if (cachedResponse != null && cachedResponse instanceof QueryShipmentStatusResponse) {
+                logger.info("Returning cached response for message with seq_num: {}", request.getSeqNum());
+                return ResponseEntity.ok((QueryShipmentStatusResponse) cachedResponse);
+            }
             return ResponseEntity.ok().build();
         }
         
-        // Create response with mock data
+        // Create response
         QueryShipmentStatusResponse response = new QueryShipmentStatusResponse();
         response.setMessageType("QueryShipmentStatusResponse");
         response.setSeqNum(messageTrackingService.getNextSeqNum());
         response.setAck(request.getSeqNum());
         response.setTimestamp(Instant.now());
         response.setPackageId(request.getPackageId());
-        response.setTruckId(55); // Mock data
-        response.setCurrentStatus("IN_TRANSIT"); // Mock data
         
-        // Create a mock location
-        QueryShipmentStatusResponse.Location location = new QueryShipmentStatusResponse.Location(10, 20);
-        response.setCurrentLocation(location);
+        try {
+            // Find the package in the database
+            Optional<Package> packageOpt = packageRepository.findById(request.getPackageId());
+            
+            if (packageOpt.isPresent()) {
+                Package pkg = packageOpt.get();
+                Truck truck = pkg.getTruck();
+                
+                // Set truck ID if available
+                if (truck != null) {
+                    response.setTruckId(truck.getId());
+                    
+                    // Create and set the current location
+                    QueryShipmentStatusResponse.Location location = new QueryShipmentStatusResponse.Location(
+                        truck.getX(), truck.getY());
+                    response.setCurrentLocation(location);
+                } else {
+                    // If no truck assigned, use warehouse location if available
+                    if (pkg.getWarehouse() != null) {
+                        QueryShipmentStatusResponse.Location location = new QueryShipmentStatusResponse.Location(
+                            pkg.getWarehouse().getX(), pkg.getWarehouse().getY());
+                        response.setCurrentLocation(location);
+                    }
+                }
+                
+                // Map our internal status to a user-friendly status
+                String currentStatus;
+                switch (pkg.getStatus()) {
+                    case CREATED:
+                    case PACKING:
+                        currentStatus = "PROCESSING";
+                        break;
+                    case PACKED:
+                    case PICKUP_READY:
+                        currentStatus = "READY_FOR_PICKUP";
+                        break;
+                    case LOADING:
+                    case LOADED:
+                        currentStatus = "LOADING";
+                        break;
+                    case ASSIGNED:
+                    case OUT_FOR_DELIVERY:
+                    case DELIVERING:
+                        currentStatus = "IN_TRANSIT";
+                        break;
+                    case DELIVERED:
+                        currentStatus = "DELIVERED";
+                        break;
+                    case FAILED:
+                        currentStatus = "FAILED";
+                        break;
+                    default:
+                        currentStatus = "UNKNOWN";
+                }
+                response.setCurrentStatus(currentStatus);
+                
+                // Calculate estimated delivery time if package is in transit
+                if (currentStatus.equals("IN_TRANSIT") && truck != null) {
+                    // Calculate distance
+                    int distanceToDestination = calculateDistance(
+                        truck.getX(), truck.getY(), 
+                        pkg.getDestinationX(), pkg.getDestinationY());
+                    
+                    // Assume average speed (1 unit per minute)
+                    int estimatedMinutes = distanceToDestination;
+                    
+                    // Set expected delivery time
+                    response.setExpectedDeliveryTime(Instant.now().plusSeconds(estimatedMinutes * 60));
+                }
+                
+                logger.info("Found package {} with status {}", pkg.getId(), currentStatus);
+            } else {
+                // Package not found
+                response.setCurrentStatus("NOT_FOUND");
+                logger.warn("Package not found with ID: {}", request.getPackageId());
+            }
+        } catch (Exception e) {
+            // Handle exceptions
+            response.setCurrentStatus("ERROR");
+            logger.error("Error processing status query for package {}: {}", 
+                request.getPackageId(), e.getMessage(), e);
+        }
         
-        // Set an expected delivery time (20 minutes from now)
-        response.setExpectedDeliveryTime(Instant.now().plusSeconds(20 * 60));
+        // Cache the response
+        responseCache.put(request.getSeqNum(), response);
         
         // Mark the message as processed
         messageTrackingService.markMessageProcessed(request.getSeqNum(), request.getMessageType());
@@ -199,6 +302,11 @@ public class AmazonApiController {
         messageTrackingService.recordOutgoingMessage(response.getSeqNum(), response.getMessageType());
         
         return ResponseEntity.ok(response);
+    }
+
+    // Helper method to calculate Euclidean distance
+    private int calculateDistance(int x1, int y1, int x2, int y2) {
+        return (int) Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
     }
     
     @PostMapping("/notifytruckarrived")
@@ -278,6 +386,4 @@ public class AmazonApiController {
         
         return error;
     }
-
-  
 }

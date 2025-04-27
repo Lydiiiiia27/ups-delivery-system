@@ -3,6 +3,7 @@ package com.ups.repository;
 import com.ups.model.MessageLog;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -24,4 +25,9 @@ public interface MessageLogRepository extends JpaRepository<MessageLog, Long> {
      * Find all message logs of a specific type
      */
     List<MessageLog> findByMessageType(String messageType);
+    
+    /**
+     * Find all message logs older than the given timestamp
+     */
+    List<MessageLog> findByTimestampBefore(Instant cutoffDate);
 } 

@@ -66,6 +66,7 @@ com/ups/model/Location.class
 com/ups/model/amazon/ChangeDestinationResponse.class
 com/ups/WorldUpsProto$UQuery$Builder.class
 com/ups/model/amazon/ChangeDestinationRequest$Destination.class
+com/ups/controller/AmazonApiController$1.class
 com/ups/service/MessageTrackingService.class
 com/ups/WorldUpsProto$UCommands$Builder.class
 com/ups/model/MessageLog.class
