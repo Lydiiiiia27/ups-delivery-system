@@ -26,7 +26,10 @@ public class SecurityConfig {
                 // Amazon API endpoints - explicitly permit all without authentication
                 .requestMatchers(new AntPathRequestMatcher("/api/createshipment")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/changedestination")).permitAll()
-                .requestMatchers(new AntPathRequestMatcher("/api/queryshipment")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/api/queryshipmentstatus")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/api/updateshipmentstatus")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/api/notifytruckarrived")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/api/notifydeliverycomplete")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/notify/**")).permitAll()
                 // Public endpoints
                 .requestMatchers(new AntPathRequestMatcher("/login")).permitAll()

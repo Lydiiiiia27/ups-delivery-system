@@ -1,5 +1,6 @@
 package com.ups.controller;
 
+import com.ups.model.Location;
 import com.ups.model.amazon.CreateShipmentRequest;
 import com.ups.model.amazon.CreateShipmentResponse;
 import com.ups.model.amazon.ChangeDestinationRequest;
@@ -10,8 +11,13 @@ import com.ups.model.amazon.QueryShipmentStatusRequest;
 import com.ups.model.amazon.QueryShipmentStatusResponse;
 import com.ups.model.amazon.UpdateShipmentStatus;
 import com.ups.model.amazon.UPSGeneralError;
+import com.ups.model.entity.Package;
+import com.ups.model.entity.PackageStatus;
+import com.ups.model.entity.TruckStatus;
+import com.ups.repository.PackageRepository;
 import com.ups.service.ShipmentService;
 import com.ups.service.MessageTrackingService;
+import com.ups.service.world.Ups;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api")
@@ -30,12 +37,20 @@ public class AmazonApiController {
     private static final Logger logger = LoggerFactory.getLogger(AmazonApiController.class);
     private final ShipmentService shipmentService;
     private final MessageTrackingService messageTrackingService;
+    private final PackageRepository packageRepository;
+    private final Ups ups;
     
     @Autowired
-    public AmazonApiController(ShipmentService shipmentService, MessageTrackingService messageTrackingService) {
+    public AmazonApiController(ShipmentService shipmentService, 
+                              MessageTrackingService messageTrackingService,
+                              PackageRepository packageRepository,
+                              Ups ups) {
         this.shipmentService = shipmentService;
         this.messageTrackingService = messageTrackingService;
+        this.packageRepository = packageRepository;
+        this.ups = ups;
     }
+    
     
     @PostMapping("/createshipment")
     public ResponseEntity<CreateShipmentResponse> createShipment(@RequestBody CreateShipmentRequest request) {
@@ -73,7 +88,7 @@ public class AmazonApiController {
             return ResponseEntity.internalServerError().build();
         }
     }
-    
+
     @PostMapping("/changedestination")
     public ResponseEntity<ChangeDestinationResponse> changeDestination(@RequestBody ChangeDestinationRequest request) {
         logger.info("Received changedestination request for package: {}", request.getPackageId());
@@ -91,7 +106,54 @@ public class AmazonApiController {
         response.setSeqNum(messageTrackingService.getNextSeqNum());
         response.setAck(request.getSeqNum());
         response.setTimestamp(Instant.now());
-        response.setStatus("UPDATED");
+        
+        try {
+            // Find the package
+            Optional<Package> packageOpt = packageRepository.findById(request.getPackageId());
+            
+            if (packageOpt.isPresent()) {
+                Package pkg = packageOpt.get();
+                
+                // Check if the package is in a state where destination change is allowed
+                if (pkg.getStatus() == PackageStatus.DELIVERING || pkg.getStatus() == PackageStatus.DELIVERED) {
+                    response.setStatus("FAILED");
+                    response.setError("Package is already out for delivery or delivered and cannot be redirected");
+                    logger.warn("Attempted to change destination for package {} which is in state {}", 
+                            pkg.getId(), pkg.getStatus());
+                } else {
+                    // Update the destination
+                    pkg.setDestinationX(request.getNewDestination().getX());
+                    pkg.setDestinationY(request.getNewDestination().getY());
+                    packageRepository.save(pkg);
+                    
+                    // If the package is assigned to a truck and the truck is at the warehouse,
+                    // we need to update the delivery instructions
+                    if (pkg.getTruck() != null && pkg.getTruck().getStatus() == TruckStatus.ARRIVE_WAREHOUSE) {
+                        // Send updated delivery instructions to world simulator
+                        Location newLocation = new Location(
+                                request.getNewDestination().getX(), 
+                                request.getNewDestination().getY());
+                        ups.sendTruckToDeliver(pkg.getTruck().getId(), pkg.getId(), newLocation);
+                        
+                        logger.info("Updated delivery instructions for package {} to new destination ({},{})",
+                                pkg.getId(), newLocation.getX(), newLocation.getY());
+                    }
+                    
+                    response.setStatus("UPDATED");
+                    logger.info("Successfully changed destination for package {} to ({},{})",
+                            pkg.getId(), request.getNewDestination().getX(), request.getNewDestination().getY());
+                }
+            } else {
+                response.setStatus("FAILED");
+                response.setError("Package not found with ID: " + request.getPackageId());
+                logger.warn("Destination change request for non-existent package: {}", request.getPackageId());
+            }
+        } catch (Exception e) {
+            response.setStatus("FAILED");
+            response.setError("Error processing destination change: " + e.getMessage());
+            logger.error("Error processing destination change for package {}: {}", 
+                    request.getPackageId(), e.getMessage(), e);
+        }
         
         // Mark the message as processed
         messageTrackingService.markMessageProcessed(request.getSeqNum(), request.getMessageType());
@@ -101,7 +163,7 @@ public class AmazonApiController {
         
         return ResponseEntity.ok(response);
     }
-    
+
     @PostMapping("/queryshipmentstatus")
     public ResponseEntity<QueryShipmentStatusResponse> queryShipmentStatus(@RequestBody QueryShipmentStatusRequest request) {
         logger.info("Received queryshipmentstatus request for package: {}", request.getPackageId());
@@ -216,4 +278,6 @@ public class AmazonApiController {
         
         return error;
     }
+
+  
 }
