@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.Duration;
 
@@ -14,6 +15,13 @@ import java.time.Duration;
  */
 @Configuration
 public class AmazonNotificationConfig {
+    
+    private final String amazonServiceUrl;
+    
+    @Autowired
+    public AmazonNotificationConfig(String amazonServiceUrl) {
+        this.amazonServiceUrl = amazonServiceUrl;
+    }
     
     /**
      * Create a RestTemplate with appropriate timeout settings
@@ -26,6 +34,15 @@ public class AmazonNotificationConfig {
                 .setReadTimeout(Duration.ofSeconds(30))
                 .requestFactory(this::clientHttpRequestFactory)
                 .build();
+    }
+    
+    /**
+     * Returns the Amazon service URL for use in services
+     * @return the configured Amazon service URL
+     */
+    @Bean
+    public String getAmazonServiceUrl() {
+        return amazonServiceUrl;
     }
     
     /**

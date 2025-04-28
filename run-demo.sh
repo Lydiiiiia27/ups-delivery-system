@@ -1,3 +1,82 @@
+#!/bin/bash
+
+# Start and setup the mock Amazon for UPS demo
+
+echo "UPS Demo with Mock Amazon"
+echo "========================="
+
+# Ensure the mock-amazon directory exists with correct permissions
+mkdir -p mock-amazon
+touch mock-amazon/mock-amazon.py
+chmod 644 mock-amazon/mock-amazon.py
+
+# Check if docker is running
+if ! docker ps -q > /dev/null 2>&1; then
+    echo "Error: Docker is not running. Please start Docker first."
+    exit 1
+fi
+
+# Check if UPS containers are running
+if ! docker ps -q --filter "name=ups-app" > /dev/null 2>&1; then
+    echo "Error: UPS app container is not running. Please start the UPS system first."
+    exit 1
+fi
+
+# Set the port for the mock Amazon to avoid conflicts
+MOCK_PORT=8082
+
+# Use the host.docker.internal hostname to access the host from inside Docker
+# This works for Docker for Mac and Windows, and we'll handle Linux below
+UPS_URL="http://host.docker.internal:8080"
+
+# Check for Linux-specific Docker config
+if [ "$(uname)" = "Linux" ]; then
+    # On Linux, use the Docker Gateway IP to reach host
+    DOCKER_GATEWAY_IP=$(docker network inspect bridge --format='{{range .IPAM.Config}}{{.Gateway}}{{end}}')
+    if [ -n "$DOCKER_GATEWAY_IP" ]; then
+        UPS_URL="http://$DOCKER_GATEWAY_IP:8080"
+        echo "Using Docker gateway for UPS connection: $UPS_URL"
+    else
+        # Fallback - use the host network mode
+        echo "Unable to determine Docker gateway IP, using host network mode"
+        UPS_URL="http://172.17.0.1:8080"  # Common Docker gateway IP
+    fi
+fi
+
+echo "Using UPS URL: $UPS_URL"
+
+# Verify UPS service is accessible
+echo "Verifying UPS service is accessible at ${UPS_URL}..."
+curl -s --head --fail ${UPS_URL} > /dev/null || {
+    echo "Warning: UPS service at ${UPS_URL} doesn't seem to be responding."
+    echo "Please ensure UPS is running and accessible before proceeding."
+    read -p "Continue anyway? (y/n): " continue_anyway
+    if [[ ! "$continue_anyway" =~ ^[Yy]$ ]]; then
+        echo "Aborting setup."
+        exit 1
+    fi
+}
+
+# Check if the mock Amazon container is already running
+if docker ps -q --filter "name=mock-amazon" > /dev/null 2>&1; then
+    echo "Stopping existing mock Amazon container..."
+    docker stop mock-amazon
+    docker rm mock-amazon
+fi
+
+echo "Starting enhanced mock Amazon for UPS demo..."
+
+# Get the directory of the mock Amazon
+MOCK_DIR="./mock-amazon"
+
+# Make sure the directory exists
+if [ ! -d "$MOCK_DIR" ]; then
+    echo "Error: Mock Amazon directory not found. Please run from the project root."
+    exit 1
+fi
+
+# Override the Flask app with our enhanced version
+cat > mock-amazon/mock-amazon.py << 'EOF'
 from flask import Flask, request, jsonify
 import requests
 import time
@@ -453,3 +532,57 @@ if __name__ == '__main__':
     
     # Run the Flask app
     app.run(host='0.0.0.0', port=PORT, debug=True)
+EOF
+
+# Update the UPS_URL in the mock Amazon script to point to our actual UPS app
+sed -i "s|UPS_URL = \"http://localhost:8080\"|UPS_URL = \"${UPS_URL}\"|g" mock-amazon/mock-amazon.py
+
+# Also make sure UPS_URL is correctly updated in the entire script
+sed -i "s|http://localhost:8080/api|${UPS_URL}/api|g" mock-amazon/mock-amazon.py
+
+# Run the mock Amazon in Docker
+echo "Building mock Amazon Docker image..."
+cd "$MOCK_DIR" && docker build -t mock-amazon .
+
+# Check if both UPS and mock-Amazon will be in the same Docker network
+UPS_CONTAINER_NETWORK=$(docker inspect --format='{{range $net,$v := .NetworkSettings.Networks}}{{$net}} {{end}}' ups-app)
+if [[ "$UPS_CONTAINER_NETWORK" == *"bridge"* ]]; then
+    # If UPS is on the default bridge network, we can link directly to it by container name
+    UPS_CONTAINER_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ups-app)
+    if [ -n "$UPS_CONTAINER_IP" ]; then
+        echo "UPS container found on bridge network with IP: $UPS_CONTAINER_IP"
+        UPS_URL="http://$UPS_CONTAINER_IP:8080"
+    fi
+fi
+
+echo "Final UPS URL for container: $UPS_URL"
+
+echo "Starting mock Amazon container on port $MOCK_PORT..."
+# Use host network mode for easier communication with UPS
+docker run -d --name mock-amazon --network host -e UPS_URL="$UPS_URL" -e PORT="$MOCK_PORT" mock-amazon
+
+# Wait for the container to start
+echo "Waiting for mock Amazon to start..."
+sleep 5
+
+echo "Mock Amazon is running!"
+echo "Access the demo dashboard at: http://localhost:$MOCK_PORT"
+echo "API endpoints available at: http://localhost:$MOCK_PORT/api/test/*"
+echo ""
+echo "Demonstration flow:"
+echo "1. Access the dashboard and create a shipment manually or wait for auto-generated shipments"
+echo "2. Watch the shipment progress through the UPS system"
+echo "3. Check UPS tracking at: http://localhost:8080/tracking?trackingNumber=<package_id>"
+echo ""
+echo "Press Ctrl+C to stop the demo and clean up..."
+
+# Keep script running until user presses Ctrl+C
+trap "echo 'Stopping mock Amazon...'; docker stop mock-amazon && docker rm mock-amazon; echo 'Demo stopped.'" EXIT
+
+# Monitor the logs but don't exit immediately if the container exits
+while docker ps -q --filter "name=mock-amazon" > /dev/null 2>&1; do
+    docker logs --tail 10 --follow mock-amazon || true
+    sleep 2
+done
+
+echo "Mock Amazon container stopped unexpectedly. Please check for errors."
