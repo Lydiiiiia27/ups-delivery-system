@@ -1,0 +1,9 @@
+mock-amazon/venv/*
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
+*.pywz
+__pycache__/
