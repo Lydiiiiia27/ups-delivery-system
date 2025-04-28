@@ -1,133 +1,261 @@
 # UPS Delivery System
 
-This project implements a UPS delivery system that interfaces with Amazon's shipping API and a World simulator.
+## Overview
+
+This project implements a delivery tracking system that interfaces with Amazon and a World simulator. It allows for real-time tracking of packages from warehouse pickup to final delivery.
+
+## System Architecture
+
+The UPS Delivery System follows a microservices architecture with several key components:
+
+### Core Components
+
+1. **Web Interface**
+   - User management system
+   - Package tracking interface
+   - Dashboard for authenticated users
+   - Redirect package functionality
+
+2. **API Layer**
+   - RESTful endpoints for Amazon integration
+   - World Simulator communication
+   - Message tracking and acknowledgment system
+
+3. **Business Logic**
+   - Package lifecycle management
+   - Truck assignment and coordination
+   - Warehouse integration
+   - Delivery optimization
+
+4. **Data Layer**
+   - PostgreSQL database for permanent storage
+   - Entity models (Packages, Trucks, Users, etc.)
+   - Transaction management
+
+5. **Integration Services**
+   - Amazon notification service
+   - World Simulator connector
+   - Response handlers
+
+## Tech Stack
+
+- **Backend**: Java 17 with Spring Boot 3.1.x
+- **Database**: PostgreSQL for production, H2 for testing
+- **ORM**: Hibernate via Spring Data JPA
+- **Frontend**: Thymeleaf templates with Bootstrap 5
+- **Communication**: Google Protocol Buffers for World Simulator
+- **Security**: Spring Security for authentication and authorization
+- **API**: RESTful JSON API via Spring MVC
+- **Build Tool**: Maven
+- **Containerization**: Docker and Docker Compose
+- **Testing**: JUnit 5, Mockito
+
+## Core Entities
+
+- **Package**: Represents a shipment with status, destination, and items
+- **Truck**: Represents a delivery vehicle with location and status
+- **User**: Represents a UPS account holder
+- **Warehouse**: Represents product storage locations
+- **PackageItem**: Represents items within a package
+
+## Package Lifecycle
+
+1. **CREATED**: Package is initially created from Amazon request
+2. **ASSIGNED**: Package is assigned to a truck
+3. **PICKUP_READY**: Truck has arrived at warehouse for pickup
+4. **LOADING**: Package is being loaded onto truck
+5. **LOADED**: Package is loaded and ready for transport
+6. **OUT_FOR_DELIVERY**: Truck is en route to delivery location
+7. **DELIVERING**: Package is actively being delivered
+8. **DELIVERED**: Package has been successfully delivered
 
 ## Getting Started
 
 ### Prerequisites
-- Java 17
-- Maven
-- PostgreSQL (optional, H2 in-memory database available for development)
-- World simulator running
 
-### Installation and Setup
+- Docker and Docker Compose
+- Java 17 (for development)
+- Maven (for development)
 
-1. Clone the repository
+### Running with Docker
+
+1. Clone the repository:
 ```bash
 git clone https://gitlab.oit.duke.edu/jt454/erss-project-ys467-jt454.git
-cd erss-project-ys467-jt454/ups-delivery-system
+cd erss-project-ys467-jt454
 ```
 
-2. Build the project
+2. Start the services:
+```bash
+docker-compose up -d
+```
+
+3. Access the UPS interface:
+   - Web interface: http://localhost:8080
+   - Tracking page: http://localhost:8080/tracking
+
+### Development Setup
+
+1. Install Java 17 and Maven
+2. Build the project:
 ```bash
 mvn clean install
 ```
 
-3. Run the application
+3. Run tests:
+```bash
+mvn test
+```
+
+4. Start the development server:
 ```bash
 mvn spring-boot:run
 ```
 
-The server will start on port 8080 by default.
+## Amazon Integration
 
-## API Documentation
+### Required API Endpoints
 
-### Create Shipment
+The UPS system expects the following endpoints on the Amazon side:
 
-#### Example Request
+- **Truck Arrival Notification**: `/api/ups/notifications/truck-arrived`
+- **Delivery Completion Notification**: `/api/ups/notifications/delivery-complete`
+- **Status Update Notification**: `/api/ups/notifications/status-update`
 
-Save the JSON to a file (e.g., shipment.json):
+### API Communication Protocol
 
-```json
-{
-  "message_type": "CreateShipmentRequest",
-  "seq_num": 101,
-  "timestamp": "2023-04-10T15:00:00Z",
-  "shipment_info": {
-    "package_id": 1001,
-    "warehouse_id": 10,
-    "destination": {"x": 3, "y": 5},
-    "ups_account_name": "testuser",
-    "items": [
-      {
-        "product_id": 2001,
-        "description": "Test Product",
-        "count": 2
-      }
-    ]
-  }
-}
-```
+The UPS system implements the protocol defined in `FinalProject_Protocols.pdf`. Key message flows include:
 
-#### Using curl
+1. **Amazon → UPS**:
+   - CreateShipmentRequest
+   - ChangeDestinationRequest
+   - QueryShipmentStatusRequest
+   - PackageLoadedRequest
 
-Send the request using curl with a file:
+2. **UPS → Amazon**:
+   - NotifyTruckArrived
+   - NotifyDeliveryComplete
+   - UpdateShipmentStatus
+   - UPSGeneralError
+
+## World Simulator Integration
+
+The UPS system communicates with the World Simulator using Google Protocol Buffers as defined in `world_ups-1.proto`. Key message flows include:
+
+1. **UPS → World**:
+   - UConnect (initial connection)
+   - UGoPickup (send truck to warehouse)
+   - UGoDeliver (deliver package)
+   - UQuery (check truck status)
+
+2. **World → UPS**:
+   - UConnected (connection confirmation)
+   - UFinished (truck arrived at destination)
+   - UDeliveryMade (package delivered)
+   - UTruck (truck status updates)
+
+## Testing
+
+### Mock Amazon Service
+
+For testing the Amazon integration, a mock Amazon service is provided:
+
+1. Start the mock service:
 ```bash
-curl -X POST -H "Content-Type: application/json" -d @shipment.json http://vcm-46935.vm.duke.edu:8080/api/createshipment
+./run-demo.sh
 ```
 
-Or as a single command with the JSON inline:
+2. Access the mock Amazon dashboard:
+```
+http://localhost:8082
+```
+
+3. Create test shipments through the interface
+
+### Test Scripts
+
+Several test scripts are provided:
+
+- `test-ups-function.sh`: Tests basic UPS functionality
+- `test-amazon-connection.sh`: Tests Amazon API connectivity
+- `demo-script.sh`: Guided demonstration of the complete system
+
+### Integration Tests
+
+Run integration tests with the World Simulator:
+
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"message_type":"CreateShipmentRequest","seq_num":101,"timestamp":"2023-04-10T15:00:00Z","shipment_info":{"package_id":1001,"warehouse_id":10,"destination":{"x":3,"y":5},"ups_account_name":"testuser","items":[{"product_id":2001,"description":"Test Product","count":2}]}}' http://vcm-46935.vm.duke.edu:8080/api/createshipment
+mvn test -Dtest=WorldSimulatorLiveIntegrationTest -DWORLD_SIMULATOR_RUNNING=true
 ```
 
-#### Using Postman
+## Configuration
 
-1. Download and install Postman from [postman.com](https://www.postman.com/downloads/)
-2. Create a new request with:
-   - Method: POST
-   - URL: http://vcm-46935.vm.duke.edu:8080/api/createshipment
-   - Body: Select "raw" and "JSON", then paste your JSON
-3. Click "Send"
+The UPS system can be configured through:
 
-A successful response will look like:
-```json
-{
-  "message_type": "CreateShipmentResponse",
-  "seq_num": 201,
-  "timestamp": "2023-04-10T15:01:00Z",
-  "status": "ACCEPTED",
-  "truck_id": 55
-}
-```
+1. **Environment Variables**:
+   - `AMAZON_SERVICE_URL`: URL of the Amazon service
+   - `UPS_WORLD_HOST`: Hostname of the World Simulator
+   - `UPS_WORLD_PORT`: Port of the World Simulator
+   - `UPS_WORLD_CREATE_NEW`: Whether to create a new world (true/false)
 
-## Implementation Roadmap
+2. **Application Properties**:
+   - Edit `src/main/resources/application.properties` for basic settings
+   - Environment-specific properties in `application-{env}.properties`
 
-### World Communication (Member 1)
+## Troubleshooting
 
-- Ensure the World simulator is running in your environment
-- Test the connection to the World simulator
-- Implement handlers for World responses
+### Common Issues
 
-### Amazon API & Web Interface (Member 2)
+1. **Connection Errors**:
+   - Ensure the World Simulator is running
+   - Check Amazon service connectivity with `./test-amazon-connection.sh`
 
-- Complete the ShipmentServiceImpl class
-- Implement database operations for shipment tracking
-- Connect the web UI with the backend
+2. **Warehouse ID Errors**:
+   - Use only warehouse IDs that exist in the World Simulator
+   - Restart UPS system to initialize warehouses
 
-### Next Steps
+3. **Package Status Issues**:
+   - Check database for current package status
+   - Verify Amazon has sent proper notifications
 
-- Complete actual implementation of ShipmentServiceImpl to:
-  - Create a real package entry in the database
-  - Associate it with a user (if the UPS account name exists)
-  - Select an available truck
-  - Communicate with the World simulator to send the truck for pickup
+### Logs
 
-- Test the web interface to verify that:
-  - New shipments appear in the dashboard for logged-in users
-  - Package tracking works for the created packages
+- UPS application logs: `docker logs ups-app`
+- Database logs: `docker logs ups-db`
+- World Simulator logs: `docker logs world-simulator`
+- Mock Amazon logs: `docker logs mock-amazon`
 
-- Implement the remaining API endpoints for:
-  - ChangeDestinationRequest
-  - QueryShipmentStatusRequest
-  - Handling incoming notifications from Amazon
+## Component Details
 
-## Project Status
+### WorldConnector
 
-The basic API communication with Amazon is functional. The current implementation:
-- Has Spring Boot application running properly
-- Includes AmazonApiController that handles incoming requests
-- Has a mock ShipmentServiceImpl that generates responses
-- Correctly configured API endpoints
+Handles connection to the World Simulator and sending commands:
+- Connects to a specific World ID or creates a new world
+- Sends truck pickup and delivery commands
+- Queries truck status
+- Handles message acknowledgment
 
-Implementation is ongoing for database integration and World simulator communication.
+### WorldResponseHandler
+
+Processes responses from the World Simulator:
+- Updates truck location and status
+- Updates package status
+- Sends notifications to Amazon
+- Handles error responses
+
+### AmazonNotificationService
+
+Sends notifications to Amazon about package and truck status:
+- Truck arrival notifications
+- Delivery completion notifications
+- Status update notifications
+- Error handling and retries
+
+### ShipmentService
+
+Processes shipment requests from Amazon:
+- Creates new packages
+- Assigns trucks to packages
+- Updates package status
+- Coordinates with WorldConnector for truck dispatching
+
