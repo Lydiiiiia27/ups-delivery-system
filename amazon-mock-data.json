@@ -6,10 +6,12 @@
   "latency": 0,
   "port": 8080,
   "hostname": "0.0.0.0",
+  "folders": [],
   "routes": [
     {
       "uuid": "e4f7b26d-dcaf-4ad3-9e2f-dc5eda674ba9",
-      "documentation": "Endpoint for truck arrival notifications",
+      "type": "http",
+      "documentation": "Truck arrived notification",
       "method": "post",
       "endpoint": "api/ups/notifications/truck-arrived",
       "responses": [
@@ -31,15 +33,19 @@
           "rulesOperator": "OR",
           "disableTemplating": false,
           "fallbackTo404": false,
-          "default": true
+          "default": true,
+          "databucketID": "",
+          "bodyType": "INLINE"
         }
       ],
       "enabled": true,
-      "responseMode": null
+      "randomResponse": false,
+      "sequentialResponse": false
     },
     {
       "uuid": "b5a9c9e8-4c5d-4b3a-9d2e-8f1c6b4d5a3e",
-      "documentation": "Endpoint for delivery completion notifications",
+      "type": "http",
+      "documentation": "Delivery complete notification",
       "method": "post",
       "endpoint": "api/ups/notifications/delivery-complete",
       "responses": [
@@ -61,15 +67,19 @@
           "rulesOperator": "OR",
           "disableTemplating": false,
           "fallbackTo404": false,
-          "default": true
+          "default": true,
+          "databucketID": "",
+          "bodyType": "INLINE"
         }
       ],
       "enabled": true,
-      "responseMode": null
+      "randomResponse": false,
+      "sequentialResponse": false
     },
     {
       "uuid": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-      "documentation": "Endpoint for status update notifications",
+      "type": "http",
+      "documentation": "Status update notification",
       "method": "post",
       "endpoint": "api/ups/notifications/status-update",
       "responses": [
@@ -91,15 +101,96 @@
           "rulesOperator": "OR",
           "disableTemplating": false,
           "fallbackTo404": false,
-          "default": true
+          "default": true,
+          "databucketID": "",
+          "bodyType": "INLINE"
         }
       ],
       "enabled": true,
-      "responseMode": null
+      "randomResponse": false,
+      "sequentialResponse": false
+    },
+    {
+      "uuid": "5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
+      "type": "http",
+      "documentation": "Create shipment response",
+      "method": "post",
+      "endpoint": "api/createshipment",
+      "responses": [
+        {
+          "uuid": "6f7e8d9c-0b1a-2c3d-4e5f-6g7h8i9j0k1l",
+          "body": "{ \"message_type\": \"CreateShipmentResponse\", \"seq_num\": 202, \"ack\": 101, \"timestamp\": \"2025-04-10T15:00:01Z\", \"status\": \"ACCEPTED\", \"truck_id\": 1 }",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "filePath": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "databucketID": "",
+          "bodyType": "INLINE"
+        }
+      ],
+      "enabled": true,
+      "randomResponse": false,
+      "sequentialResponse": false
+    },
+    {
+      "uuid": "a1b2c3d4-e5f6-7g8h-9i0j-k1l2m3n4o5p6",
+      "type": "http",
+      "documentation": "Package loaded endpoint",
+      "method": "post",
+      "endpoint": "api/packageloaded",
+      "responses": [
+        {
+          "uuid": "b2c3d4e5-f6g7-h8i9-j0k1-l2m3n4o5p6q7",
+          "body": "{ \"success\": true }",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "filePath": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "databucketID": "",
+          "bodyType": "INLINE"
+        }
+      ],
+      "enabled": true,
+      "randomResponse": false,
+      "sequentialResponse": false
     }
   ],
   "proxyMode": false,
   "proxyHost": "",
+  "proxyRemovePrefix": false,
+  "tlsOptions": {
+    "enabled": false,
+    "type": "CERT",
+    "pfxPath": "",
+    "certPath": "",
+    "keyPath": "",
+    "caPath": "",
+    "passphrase": ""
+  },
   "cors": true,
   "headers": [
     {
@@ -118,6 +209,5 @@
       "key": "",
       "value": ""
     }
-  ],
-  "data": []
+  ]
 }

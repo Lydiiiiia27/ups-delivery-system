@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: com.ups.controller.AmazonApiControllerTest
--------------------------------------------------------------------------------
-Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.846 s - in com.ups.controller.AmazonApiControllerTest
