@@ -1,6 +1,7 @@
 com/ups/test/WorldSimulatorTestCLI.class
 com/ups/controller/AmazonApiControllerTest.class
 com/ups/service/world/WorldConnectorIntegrationTest.class
+com/ups/controller/TestController.class
 com/ups/service/world/WorldSimulatorLiveIntegrationTest.class
 com/ups/service/world/WorldResponseHandlerTest.class
 com/ups/controller/IntegrationTestController.class
@@ -9,5 +10,6 @@ com/ups/service/world/WorldResponseHandlerIntegrationTest.class
 com/ups/service/world/WorldSimulatorWarehouseAwareIntegrationTest.class
 com/ups/service/AmazonNotificationServiceTest.class
 com/ups/service/world/WorldResponseHandlingIntegrationTest.class
+com/ups/config/TestSecurityConfig.class
 com/ups/helper/WorldConnectorTestHelper.class
 com/ups/AppTest.class

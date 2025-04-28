@@ -1,0 +1,18 @@
+version: '3'
+services:
+  mock-amazon:
+    build: .
+    container_name: mock-amazon
+    ports:
+      - "8082:8080"
+    networks:
+      - ups-network
+      - world-network
+
+networks:
+  ups-network:
+    external: true
+    name: erss-project-ys467-jt454_ups-network
+  world-network:
+    external: true
+    name: erss-project-ys467-jt454_world-network
