@@ -301,4 +301,32 @@ public class Ups {
         String activeProfiles = System.getProperty("spring.profiles.active", "");
         return activeProfiles.contains("test");
     }
+
+    /**
+     * Send acknowledgements for received messages
+     * @param acks The list of sequence numbers to acknowledge
+     * @throws IOException If an error occurs while sending the command
+     */
+    public void sendAcknowledgements(List<Long> acks) throws IOException {
+        if (acks == null || acks.isEmpty()) {
+            return;
+        }
+        
+        if (!worldConnector.isConnected()) {
+            logger.warn("Cannot send acknowledgements - not connected to world simulator");
+            return;
+        }
+        
+        worldConnector.sendAcknowledgements(acks);
+        logger.debug("Sent {} acknowledgements to World Simulator", acks.size());
+    }
+    
+    /**
+     * Check if running in test environment
+     * @return true if in test environment, false otherwise
+     */
+    private boolean isTestEnvironment() {
+        String activeProfiles = System.getProperty("spring.profiles.active", "");
+        return activeProfiles.contains("test");
+    }
 }

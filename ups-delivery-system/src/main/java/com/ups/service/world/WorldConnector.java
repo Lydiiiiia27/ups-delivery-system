@@ -352,4 +352,53 @@ public class WorldConnector {
         logger.debug("Received message of type {}, size: {} bytes", message.getClass().getSimpleName(), size);
         return message;
     }
+
+    /**
+     * Send acknowledgements for received messages
+     * @param acks The list of sequence numbers to acknowledge
+     * @throws IOException If an error occurs while sending the command
+     */
+    public void sendAcknowledgements(List<Long> acks) throws IOException {
+        if (acks == null || acks.isEmpty()) {
+            return;
+        }
+        
+        // Create UCommands request with acknowledgements
+        WorldUpsProto.UCommands.Builder commandsBuilder = WorldUpsProto.UCommands.newBuilder();
+        commandsBuilder.addAllAcks(acks);
+        
+        // Send the request
+        WorldUpsProto.UCommands command = commandsBuilder.build();
+        sendMessage(command);
+        
+        logger.debug("Sent {} acknowledgements to World Simulator", acks.size());
+    }
+    
+    /**
+     * Send a Protobuf message with length prefix
+     * @param message The message to send
+     * @throws IOException If an error occurs while sending the message
+     */
+    private <T extends com.google.protobuf.Message> void sendMessage(T message) throws IOException {
+        if (socket == null || socket.isClosed()) {
+            throw new IOException("Socket is not connected");
+        }
+        
+        OutputStream out = socket.getOutputStream();
+        byte[] data = message.toByteArray();
+        
+        // Create a CodedOutputStream to handle writing the message
+        CodedOutputStream codedOut = CodedOutputStream.newInstance(out);
+        
+        // Write the message size as a Varint32
+        codedOut.writeUInt32NoTag(data.length);
+        
+        // Write the message data
+        codedOut.writeRawBytes(data);
+        
+        // Flush the stream
+        codedOut.flush();
+        
+        logger.debug("Sent message of type {}, size: {} bytes", message.getClass().getSimpleName(), data.length);
+    }
 }

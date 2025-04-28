@@ -181,6 +181,7 @@ public class WorldResponseHandler {
     private void processArrivalAtWarehouse(Truck truck, WorldUpsProto.UFinished completion) {
         // Find packages assigned to this truck
         List<Package> packages = packageRepository.findByTruckAndStatus(truck, PackageStatus.ASSIGNED);
+        
         if (packages.isEmpty()) {
             logger.info("No packages assigned to truck {} at warehouse", truck.getId());
             return;
@@ -188,26 +189,38 @@ public class WorldResponseHandler {
         
         // Find the warehouse at current location
         Optional<Warehouse> warehouseOpt = findNearestWarehouse(completion.getX(), completion.getY());
-        if (warehouseOpt.isPresent()) {
-            Warehouse warehouse = warehouseOpt.get();
-            
-            // Notify Amazon for each package
-            for (Package pkg : packages) {
-                // Update package status
-                pkg.setStatus(PackageStatus.PICKUP_READY);
-                packageRepository.save(pkg);
-                
-                // Send notification to Amazon
-                try {
+        if (warehouseOpt.isEmpty()) {
+            logger.error("Could not find warehouse near location ({},{})", completion.getX(), completion.getY());
+            return;
+        }
+        
+        Warehouse warehouse = warehouseOpt.get();
+        logger.info("Truck {} arrived at warehouse {} at location ({},{})", 
+                truck.getId(), warehouse.getId(), completion.getX(), completion.getY());
+        
+        // Process each package assigned to this truck
+        for (Package pkg : packages) {
+            try {
+                // Only process packages that are in ASSIGNED status and belong to this warehouse
+                if (pkg.getWarehouse() != null && pkg.getWarehouse().getId().equals(warehouse.getId())) {
+                    // Update package status to PICKUP_READY
+                    pkg.setStatus(PackageStatus.PICKUP_READY);
+                    packageRepository.save(pkg);
+                    
+                    // Send notification to Amazon about truck arrival
                     amazonNotificationService.notifyTruckArrival(pkg, truck, warehouse);
                     logger.info("Notified Amazon about truck {} arrival at warehouse {} for package {}", 
                             truck.getId(), warehouse.getId(), pkg.getId());
-                } catch (Exception e) {
-                    logger.error("Failed to notify Amazon about truck arrival", e);
+                    
+                    // DO NOT auto-load the package here - wait for Amazon's confirmation
+                    // Amazon will send a package loaded notification when they're ready
+                } else {
+                    logger.warn("Package {} assigned to truck {} but belongs to different warehouse", 
+                            pkg.getId(), truck.getId());
                 }
+            } catch (Exception e) {
+                logger.error("Error processing package {} for truck arrival", pkg.getId(), e);
             }
-        } else {
-            logger.error("Could not find warehouse near location ({},{})", completion.getX(), completion.getY());
         }
     }
     
@@ -357,6 +370,94 @@ public class WorldResponseHandler {
     private void processError(WorldUpsProto.UErr error) {
         logger.error("World error for sequence {}: {}", error.getOriginseqnum(), error.getErr());
         
+        // Try to recover from the error by identifying affected packages
+        String errorMessage = error.getErr().toLowerCase();
+        
+        if (errorMessage.contains("package")) {
+            // Extract package ID if mentioned in error
+            handlePackageError(error);
+        } else if (errorMessage.contains("truck")) {
+            // Extract truck ID if mentioned in error
+            handleTruckError(error);
+        } else {
+            // General error - notify Amazon about all active packages
+            handleGeneralError(error);
+        }
+    }
+    
+    /**
+     * Handle package-specific errors
+     */
+    private void handlePackageError(WorldUpsProto.UErr error) {
+        // Try to extract package ID from error message
+        String errorMsg = error.getErr();
+        try {
+            // Look for numeric package ID in error message
+            String[] parts = errorMsg.split("\\s+");
+            for (String part : parts) {
+                if (part.matches("\\d+")) {
+                    Long packageId = Long.parseLong(part);
+                    Optional<Package> packageOpt = packageRepository.findById(packageId);
+                    
+                    if (packageOpt.isPresent()) {
+                        Package pkg = packageOpt.get();
+                        pkg.setStatus(PackageStatus.FAILED);
+                        packageRepository.save(pkg);
+                        
+                        amazonNotificationService.sendStatusUpdate(pkg, pkg.getTruck(), 
+                            "ERROR", "Package error: " + errorMsg);
+                        logger.info("Marked package {} as failed due to error", packageId);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Failed to process package error", e);
+        }
+    }
+    
+    /**
+     * Handle truck-specific errors
+     */
+    private void handleTruckError(WorldUpsProto.UErr error) {
+        // Try to extract truck ID from error message
+        String errorMsg = error.getErr();
+        try {
+            // Look for numeric truck ID in error message
+            String[] parts = errorMsg.split("\\s+");
+            for (String part : parts) {
+                if (part.matches("\\d+")) {
+                    Integer truckId = Integer.parseInt(part);
+                    Optional<Truck> truckOpt = truckRepository.findById(truckId);
+                    
+                    if (truckOpt.isPresent()) {
+                        Truck truck = truckOpt.get();
+                        truck.setStatus(TruckStatus.IDLE);
+                        truckRepository.save(truck);
+                        
+                        // Mark all packages on this truck as failed
+                        List<Package> packages = packageRepository.findByTruck(truck);
+                        for (Package pkg : packages) {
+                            if (pkg.getStatus() != PackageStatus.DELIVERED) {
+                                pkg.setStatus(PackageStatus.FAILED);
+                                packageRepository.save(pkg);
+                                
+                                amazonNotificationService.sendStatusUpdate(pkg, truck, 
+                                    "ERROR", "Truck error: " + errorMsg);
+                            }
+                        }
+                        logger.info("Marked truck {} as idle and packages as failed due to error", truckId);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Failed to process truck error", e);
+        }
+    }
+    
+    /**
+     * Handle general errors
+     */
+    private void handleGeneralError(WorldUpsProto.UErr error) {
         // Find all packages that might be affected and notify Amazon
         List<Package> activePackages = packageRepository.findAll().stream()
                 .filter(pkg -> pkg.getStatus() != PackageStatus.DELIVERED && pkg.getStatus() != PackageStatus.FAILED)
@@ -368,12 +469,13 @@ public class WorldResponseHandler {
                     pkg, 
                     pkg.getTruck(), 
                     "ERROR", 
-                    "Operation error: " + error.getErr() + " (seq: " + error.getOriginseqnum() + ")"
+                    "System error: " + error.getErr() + " (seq: " + error.getOriginseqnum() + ")"
                 );
             } catch (Exception e) {
-                logger.error("Failed to send error notification to Amazon", e);
+                logger.error("Failed to send status update for package {}", pkg.getId(), e);
             }
         }
+        logger.info("Notified Amazon about general error for {} active packages", activePackages.size());
     }
     
     /**
@@ -444,6 +546,8 @@ public class WorldResponseHandler {
     private int distance(int x1, int y1, int x2, int y2) {
         return (int) Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
     }
+
+    
     
     /**
      * Stop the response handler
@@ -451,69 +555,5 @@ public class WorldResponseHandler {
     public void stop() {
         logger.info("Stopping World Response Handler");
         running = false;
-    }
-
-    /**
-     * Process truck arrival at warehouse
-     */
-    private void processArrivalAtWarehouse(Truck truck, WorldUpsProto.UFinished completion) {
-        // Find packages assigned to this truck
-        List<Package> packages = packageRepository.findByTruckAndStatus(truck, PackageStatus.ASSIGNED);
-        
-        if (packages.isEmpty()) {
-            logger.info("No packages assigned to truck {} at warehouse", truck.getId());
-            return;
-        }
-        
-        // Find the warehouse at current location
-        Optional<Warehouse> warehouseOpt = findNearestWarehouse(completion.getX(), completion.getY());
-        if (warehouseOpt.isEmpty()) {
-            logger.error("Could not find warehouse near location ({},{})", completion.getX(), completion.getY());
-            return;
-        }
-        
-        Warehouse warehouse = warehouseOpt.get();
-        logger.info("Truck {} arrived at warehouse {} at location ({},{})", 
-                truck.getId(), warehouse.getId(), completion.getX(), completion.getY());
-        
-        // Process each package assigned to this truck
-        for (Package pkg : packages) {
-            try {
-                // Only process packages that are in ASSIGNED status and belong to this warehouse
-                if (pkg.getWarehouse() != null && pkg.getWarehouse().getId().equals(warehouse.getId())) {
-                    // Update package status to PICKUP_READY
-                    pkg.setStatus(PackageStatus.PICKUP_READY);
-                    packageRepository.save(pkg);
-                    
-                    // Send notification to Amazon
-                    amazonNotificationService.notifyTruckArrival(pkg, truck, warehouse);
-                    logger.info("Notified Amazon about truck {} arrival at warehouse {} for package {}", 
-                            truck.getId(), warehouse.getId(), pkg.getId());
-                    
-                    // After notifying Amazon, the package can be loaded
-                    // In real flow, Amazon would send a load command, but for testing we can simulate it
-                    // TODO: Remove this auto-load in production
-                    pkg.setStatus(PackageStatus.LOADED);
-                    packageRepository.save(pkg);
-                    
-                    // Immediately send truck to deliver after loading
-                    if (truck.getStatus() == TruckStatus.ARRIVE_WAREHOUSE) {
-                        try {
-                            ups.sendTruckToDeliver(truck.getId(), pkg.getId(), 
-                                new Location(pkg.getDestinationX(), pkg.getDestinationY()));
-                            logger.info("Sent truck {} to deliver package {} to ({},{})", 
-                                    truck.getId(), pkg.getId(), pkg.getDestinationX(), pkg.getDestinationY());
-                        } catch (Exception e) {
-                            logger.error("Error sending truck to deliver", e);
-                        }
-                    }
-                } else {
-                    logger.warn("Package {} assigned to truck {} but belongs to different warehouse", 
-                            pkg.getId(), truck.getId());
-                }
-            } catch (Exception e) {
-                logger.error("Error processing package {} for truck arrival", pkg.getId(), e);
-            }
-        }
     }
 }
