@@ -350,6 +350,45 @@ public class AmazonApiController {
         // No response is expected for notifications
         return ResponseEntity.ok().build();
     }
+
+    @PostMapping("/notifytruckarrived")
+    public ResponseEntity<Void> notifyTruckArrived(@RequestBody NotifyTruckArrived notification) {
+        logger.info("Received truck arrived notification for package: {}, truck: {}", 
+                notification.getPackageId(), notification.getTruckId());
+        
+        // Check if the message has already been processed
+        if (messageTrackingService.isMessageProcessed(notification.getSeqNum())) {
+            logger.info("Duplicate message received with seq_num: {}", notification.getSeqNum());
+            return ResponseEntity.ok().build();
+        }
+        
+        try {
+            // Process truck arrived notification
+            Optional<Package> packageOpt = packageRepository.findById(notification.getPackageId());
+            Optional<Truck> truckOpt = truckRepository.findById(notification.getTruckId());
+            
+            if (packageOpt.isPresent() && truckOpt.isPresent()) {
+                Package pkg = packageOpt.get();
+                Truck truck = truckOpt.get();
+                
+                // Update package status to PICKUP_READY
+                pkg.setStatus(PackageStatus.PICKUP_READY);
+                packageRepository.save(pkg);
+                
+                logger.info("Updated package {} status to PICKUP_READY", pkg.getId());
+            } else {
+                logger.error("Package {} or Truck {} not found for truck arrival notification", 
+                        notification.getPackageId(), notification.getTruckId());
+            }
+        } catch (Exception e) {
+            logger.error("Error processing truck arrival notification", e);
+        }
+        
+        // Mark the message as processed
+        messageTrackingService.markMessageProcessed(notification.getSeqNum(), notification.getMessageType());
+        
+        return ResponseEntity.ok().build();
+    }
     
     @PostMapping("/updateshipmentstatus")
     public ResponseEntity<Void> updateShipmentStatus(@RequestBody UpdateShipmentStatus update) {

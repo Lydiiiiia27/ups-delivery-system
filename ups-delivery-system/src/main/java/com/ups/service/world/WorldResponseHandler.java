@@ -452,4 +452,68 @@ public class WorldResponseHandler {
         logger.info("Stopping World Response Handler");
         running = false;
     }
+
+    /**
+     * Process truck arrival at warehouse
+     */
+    private void processArrivalAtWarehouse(Truck truck, WorldUpsProto.UFinished completion) {
+        // Find packages assigned to this truck
+        List<Package> packages = packageRepository.findByTruckAndStatus(truck, PackageStatus.ASSIGNED);
+        
+        if (packages.isEmpty()) {
+            logger.info("No packages assigned to truck {} at warehouse", truck.getId());
+            return;
+        }
+        
+        // Find the warehouse at current location
+        Optional<Warehouse> warehouseOpt = findNearestWarehouse(completion.getX(), completion.getY());
+        if (warehouseOpt.isEmpty()) {
+            logger.error("Could not find warehouse near location ({},{})", completion.getX(), completion.getY());
+            return;
+        }
+        
+        Warehouse warehouse = warehouseOpt.get();
+        logger.info("Truck {} arrived at warehouse {} at location ({},{})", 
+                truck.getId(), warehouse.getId(), completion.getX(), completion.getY());
+        
+        // Process each package assigned to this truck
+        for (Package pkg : packages) {
+            try {
+                // Only process packages that are in ASSIGNED status and belong to this warehouse
+                if (pkg.getWarehouse() != null && pkg.getWarehouse().getId().equals(warehouse.getId())) {
+                    // Update package status to PICKUP_READY
+                    pkg.setStatus(PackageStatus.PICKUP_READY);
+                    packageRepository.save(pkg);
+                    
+                    // Send notification to Amazon
+                    amazonNotificationService.notifyTruckArrival(pkg, truck, warehouse);
+                    logger.info("Notified Amazon about truck {} arrival at warehouse {} for package {}", 
+                            truck.getId(), warehouse.getId(), pkg.getId());
+                    
+                    // After notifying Amazon, the package can be loaded
+                    // In real flow, Amazon would send a load command, but for testing we can simulate it
+                    // TODO: Remove this auto-load in production
+                    pkg.setStatus(PackageStatus.LOADED);
+                    packageRepository.save(pkg);
+                    
+                    // Immediately send truck to deliver after loading
+                    if (truck.getStatus() == TruckStatus.ARRIVE_WAREHOUSE) {
+                        try {
+                            ups.sendTruckToDeliver(truck.getId(), pkg.getId(), 
+                                new Location(pkg.getDestinationX(), pkg.getDestinationY()));
+                            logger.info("Sent truck {} to deliver package {} to ({},{})", 
+                                    truck.getId(), pkg.getId(), pkg.getDestinationX(), pkg.getDestinationY());
+                        } catch (Exception e) {
+                            logger.error("Error sending truck to deliver", e);
+                        }
+                    }
+                } else {
+                    logger.warn("Package {} assigned to truck {} but belongs to different warehouse", 
+                            pkg.getId(), truck.getId());
+                }
+            } catch (Exception e) {
+                logger.error("Error processing package {} for truck arrival", pkg.getId(), e);
+            }
+        }
+    }
 }

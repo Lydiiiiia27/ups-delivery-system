@@ -102,7 +102,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 pkg.setUser(user);
                 pkg.setDestinationX(request.getShipmentInfo().getDestination().getX());
                 pkg.setDestinationY(request.getShipmentInfo().getDestination().getY());
-                pkg.setStatus(PackageStatus.CREATED);
+                pkg.setStatus(PackageStatus.ASSIGNED);
                 pkg.setTruck(truck);
                 
                 // 5. Save package
