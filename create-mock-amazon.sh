@@ -206,7 +206,7 @@ services:
     build: .
     container_name: mock-amazon
     ports:
-      - "8081:8080"
+      - "8082:8080"
     networks:
       - ups-network
       - world-network

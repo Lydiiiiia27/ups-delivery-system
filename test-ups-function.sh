@@ -6,7 +6,7 @@ echo "Starting tests: $(date)"
 
 # Configuration
 UPS_URL="http://localhost:8080"
-AMAZON_MOCK_URL="http://localhost:8081"
+AMAZON_MOCK_URL="http://localhost:8082"
 TEST_PACKAGE_ID=3001
 
 # 1. Test web interface accessibility
@@ -58,13 +58,24 @@ fi
 
 # 5. Check shipment status in mock Amazon
 echo -e "\n5. Checking shipment status in mock Amazon:"
-AMAZON_STATUS=$(curl -s "$AMAZON_MOCK_URL/api/test/shipments" | grep -o "\"$TEST_PACKAGE_ID\".*\"status\":.*}")
-
-if [[ -n "$AMAZON_STATUS" ]]; then
-    echo "✅ Shipment status tracked in Amazon"
-    echo "Status: $AMAZON_STATUS"
+AMAZON_RESPONSE=$(curl -s "$AMAZON_MOCK_URL/api/test/shipments")
+if echo "$AMAZON_RESPONSE" | grep -q "\"$TEST_PACKAGE_ID\""; then
+    # Extract the status using direct grep - match "3001": { ... "status": "CREATED" pattern
+    PACKAGE_STATUS=$(echo "$AMAZON_RESPONSE" | grep -A 10 "\"$TEST_PACKAGE_ID\"" | grep -o '"status": *"[^"]*"' | head -1 | cut -d'"' -f4)
+    
+    if [[ -n "$PACKAGE_STATUS" ]]; then
+        echo "✅ Shipment status tracked in Amazon"
+        echo "Status: $PACKAGE_STATUS"
+        AMAZON_STATUS_OK=true
+    else
+        echo "⚠️ Shipment found in Amazon but status not extracted properly"
+        echo "Raw package data for $TEST_PACKAGE_ID:"
+        echo "$AMAZON_RESPONSE" | grep -A 10 "\"$TEST_PACKAGE_ID\""
+        AMAZON_STATUS_OK=false
+    fi
 else
     echo "❌ Shipment status not found in Amazon"
+    AMAZON_STATUS_OK=false
 fi
 
 # 6. Check tracking web interface
@@ -88,7 +99,7 @@ echo "============"
 echo "- UPS Web Interface: $(if [[ "$WEB_RESPONSE" == "200" || "$WEB_RESPONSE" == "302" ]]; then echo "✅"; else echo "❌"; fi)"
 echo "- API Communication: $(if echo "$SHIPMENT_RESPONSE" | grep -q "success.*true"; then echo "✅"; else echo "❌"; fi)"
 echo "- Database Storage: $(if [[ -n "$PACKAGE_DB" ]]; then echo "✅"; else echo "❌"; fi)"
-echo "- Status Tracking: $(if [[ -n "$AMAZON_STATUS" ]]; then echo "✅"; else echo "❌"; fi)"
+echo "- Status Tracking: $(if [[ "$AMAZON_STATUS_OK" == "true" ]]; then echo "✅"; else echo "❌"; fi)"
 echo "- Tracking Interface: $(if echo "$TRACKING_RESPONSE" | grep -q "$TEST_PACKAGE_ID\|Tracking"; then echo "✅"; else echo "❌"; fi)"
 
 echo -e "\nTests completed: $(date)"
