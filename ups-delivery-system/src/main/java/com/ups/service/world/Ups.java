@@ -320,13 +320,4 @@ public class Ups {
         worldConnector.sendAcknowledgements(acks);
         logger.debug("Sent {} acknowledgements to World Simulator", acks.size());
     }
-    
-    /**
-     * Check if running in test environment
-     * @return true if in test environment, false otherwise
-     */
-    private boolean isTestEnvironment() {
-        String activeProfiles = System.getProperty("spring.profiles.active", "");
-        return activeProfiles.contains("test");
-    }
 }

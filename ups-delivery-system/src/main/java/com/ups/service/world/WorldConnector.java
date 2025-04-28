@@ -41,12 +41,6 @@ public class WorldConnector {
     
     /**
      * Connect to the World Simulator
-     * @param host The host of the World Simulator
-     * @param port The port of the World Simulator
-     * @param trucks The list of trucks to initialize in the World Simulator
-     * @param newWorld Whether to create a new world or connect to an existing one
-     * @param existingWorldId The ID of the existing world to connect to (if newWorld is false)
-     * @throws IOException If an error occurs during connection
      */
     public void connect(String host, int port, List<Truck> trucks, boolean newWorld, Long existingWorldId) throws IOException {
         try {
@@ -73,9 +67,6 @@ public class WorldConnector {
     
     /**
      * Connect to the World Simulator
-     * @param worldId The ID of the world to connect to (null to create a new world)
-     * @param trucks The list of trucks to initialize in the World Simulator
-     * @throws IOException If an error occurs during connection
      */
     private void connectToWorld(Long worldId, List<Truck> trucks) throws IOException {
         // Create UConnect request
@@ -125,7 +116,6 @@ public class WorldConnector {
     
     /**
      * Get the world ID
-     * @return The world ID
      */
     public Long getWorldId() {
         return worldId;
@@ -133,10 +123,6 @@ public class WorldConnector {
     
     /**
      * Send a truck to deliver a package
-     * @param truckId The ID of the truck
-     * @param packageId The ID of the package
-     * @param location The destination location
-     * @throws IOException If an error occurs while sending the command
      */
     public void deliver(int truckId, long packageId, Location location) throws IOException {
         // Get the next sequence number
@@ -170,9 +156,6 @@ public class WorldConnector {
     
     /**
      * Send a truck to pick up a package from a warehouse
-     * @param truckId The ID of the truck
-     * @param warehouseId The ID of the warehouse
-     * @throws IOException If an error occurs while sending the command
      */
     public void pickup(int truckId, int warehouseId) throws IOException {
         // Get the next sequence number
@@ -197,8 +180,6 @@ public class WorldConnector {
     
     /**
      * Query the status of a truck
-     * @param truckId The ID of the truck
-     * @throws IOException If an error occurs while sending the command
      */
     public void queryTruckStatus(int truckId) throws IOException {
         // Get the next sequence number
@@ -222,8 +203,6 @@ public class WorldConnector {
     
     /**
      * Set the simulation speed
-     * @param speed The simulation speed (higher numbers make things happen more quickly)
-     * @throws IOException If an error occurs while sending the command
      */
     public void setSimulationSpeed(int speed) throws IOException {
         // Create UCommands request
@@ -239,7 +218,6 @@ public class WorldConnector {
     
     /**
      * Disconnect from the World Simulator
-     * @throws IOException If an error occurs while sending the command
      */
     public void disconnect() throws IOException {
         if (socket == null || socket.isClosed()) {
@@ -283,7 +261,6 @@ public class WorldConnector {
     
     /**
      * Check if the connector is connected to the World Simulator
-     * @return true if connected, false otherwise
      */
     public boolean isConnected() {
         return socket != null && !socket.isClosed() && socket.isConnected();
@@ -291,7 +268,6 @@ public class WorldConnector {
     
     /**
      * Get the next sequence number
-     * @return The next sequence number
      */
     public long getNextSeqNum() {
         return seqNum.getAndIncrement();
@@ -299,8 +275,6 @@ public class WorldConnector {
     
     /**
      * Send a Protobuf message with length prefix
-     * @param message The message to send
-     * @throws IOException If an error occurs while sending the message
      */
     private <T extends com.google.protobuf.Message> void sendMessage(T message) throws IOException {
         if (socket == null || socket.isClosed()) {
@@ -327,9 +301,6 @@ public class WorldConnector {
     
     /**
      * Receive a Protobuf message with length prefix
-     * @param parser The parser for the message type
-     * @return The received message
-     * @throws IOException If an error occurs while receiving the message
      */
     private <T extends com.google.protobuf.Message> T receiveMessage(com.google.protobuf.Parser<T> parser) throws IOException {
         if (socket == null || socket.isClosed()) {
@@ -355,8 +326,6 @@ public class WorldConnector {
 
     /**
      * Send acknowledgements for received messages
-     * @param acks The list of sequence numbers to acknowledge
-     * @throws IOException If an error occurs while sending the command
      */
     public void sendAcknowledgements(List<Long> acks) throws IOException {
         if (acks == null || acks.isEmpty()) {
@@ -372,33 +341,5 @@ public class WorldConnector {
         sendMessage(command);
         
         logger.debug("Sent {} acknowledgements to World Simulator", acks.size());
-    }
-    
-    /**
-     * Send a Protobuf message with length prefix
-     * @param message The message to send
-     * @throws IOException If an error occurs while sending the message
-     */
-    private <T extends com.google.protobuf.Message> void sendMessage(T message) throws IOException {
-        if (socket == null || socket.isClosed()) {
-            throw new IOException("Socket is not connected");
-        }
-        
-        OutputStream out = socket.getOutputStream();
-        byte[] data = message.toByteArray();
-        
-        // Create a CodedOutputStream to handle writing the message
-        CodedOutputStream codedOut = CodedOutputStream.newInstance(out);
-        
-        // Write the message size as a Varint32
-        codedOut.writeUInt32NoTag(data.length);
-        
-        // Write the message data
-        codedOut.writeRawBytes(data);
-        
-        // Flush the stream
-        codedOut.flush();
-        
-        logger.debug("Sent message of type {}, size: {} bytes", message.getClass().getSimpleName(), data.length);
     }
 }

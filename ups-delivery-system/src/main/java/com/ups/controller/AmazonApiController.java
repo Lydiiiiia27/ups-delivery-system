@@ -16,9 +16,11 @@ import com.ups.model.entity.PackageStatus;
 import com.ups.model.entity.Truck;
 import com.ups.model.entity.TruckStatus;
 import com.ups.repository.PackageRepository;
+import com.ups.repository.TruckRepository;
 import com.ups.service.ShipmentService;
 import com.ups.service.MessageTrackingService;
 import com.ups.service.world.Ups;
+import com.ups.model.amazon.PackageLoadedRequest;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +43,7 @@ public class AmazonApiController {
     private final ShipmentService shipmentService;
     private final MessageTrackingService messageTrackingService;
     private final PackageRepository packageRepository;
+    private final TruckRepository truckRepository;
     private final Ups ups;
     
     private final Map<Long, Object> responseCache = new ConcurrentHashMap<>();
@@ -49,10 +52,12 @@ public class AmazonApiController {
     public AmazonApiController(ShipmentService shipmentService, 
                               MessageTrackingService messageTrackingService,
                               PackageRepository packageRepository,
+                              TruckRepository truckRepository,
                               Ups ups) {
         this.shipmentService = shipmentService;
         this.messageTrackingService = messageTrackingService;
         this.packageRepository = packageRepository;
+        this.truckRepository = truckRepository;
         this.ups = ups;
     }
     
@@ -320,48 +325,6 @@ public class AmazonApiController {
             return ResponseEntity.ok().build();
         }
         
-        // Process truck arrived notification
-        // TODO: Update package status in database
-        
-        // Mark the message as processed
-        messageTrackingService.markMessageProcessed(notification.getSeqNum(), notification.getMessageType());
-        
-        // No response is expected for notifications
-        return ResponseEntity.ok().build();
-    }
-    
-    @PostMapping("/notifydeliverycomplete")
-    public ResponseEntity<Void> notifyDeliveryComplete(@RequestBody NotifyDeliveryComplete notification) {
-        logger.info("Received delivery complete notification for package: {}, truck: {}", 
-                notification.getPackageId(), notification.getTruckId());
-        
-        // Check if the message has already been processed
-        if (messageTrackingService.isMessageProcessed(notification.getSeqNum())) {
-            logger.info("Duplicate message received with seq_num: {}", notification.getSeqNum());
-            return ResponseEntity.ok().build();
-        }
-        
-        // Process delivery complete notification
-        // TODO: Update package status in database
-        
-        // Mark the message as processed
-        messageTrackingService.markMessageProcessed(notification.getSeqNum(), notification.getMessageType());
-        
-        // No response is expected for notifications
-        return ResponseEntity.ok().build();
-    }
-
-    @PostMapping("/notifytruckarrived")
-    public ResponseEntity<Void> notifyTruckArrived(@RequestBody NotifyTruckArrived notification) {
-        logger.info("Received truck arrived notification for package: {}, truck: {}", 
-                notification.getPackageId(), notification.getTruckId());
-        
-        // Check if the message has already been processed
-        if (messageTrackingService.isMessageProcessed(notification.getSeqNum())) {
-            logger.info("Duplicate message received with seq_num: {}", notification.getSeqNum());
-            return ResponseEntity.ok().build();
-        }
-        
         try {
             // Process truck arrived notification
             Optional<Package> packageOpt = packageRepository.findById(notification.getPackageId());
@@ -390,6 +353,27 @@ public class AmazonApiController {
         return ResponseEntity.ok().build();
     }
     
+    @PostMapping("/notifydeliverycomplete")
+    public ResponseEntity<Void> notifyDeliveryComplete(@RequestBody NotifyDeliveryComplete notification) {
+        logger.info("Received delivery complete notification for package: {}, truck: {}", 
+                notification.getPackageId(), notification.getTruckId());
+        
+        // Check if the message has already been processed
+        if (messageTrackingService.isMessageProcessed(notification.getSeqNum())) {
+            logger.info("Duplicate message received with seq_num: {}", notification.getSeqNum());
+            return ResponseEntity.ok().build();
+        }
+        
+        // Process delivery complete notification
+        // TODO: Update package status in database
+        
+        // Mark the message as processed
+        messageTrackingService.markMessageProcessed(notification.getSeqNum(), notification.getMessageType());
+        
+        // No response is expected for notifications
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping("/updateshipmentstatus")
     public ResponseEntity<Void> updateShipmentStatus(@RequestBody UpdateShipmentStatus update) {
         logger.info("Received shipment status update for package: {}, status: {}", 
@@ -408,6 +392,52 @@ public class AmazonApiController {
         messageTrackingService.markMessageProcessed(update.getSeqNum(), update.getMessageType());
         
         // No response is expected for updates
+        return ResponseEntity.ok().build();
+    }
+    
+    @PostMapping("/packageloaded")
+    public ResponseEntity<Void> handlePackageLoaded(@RequestBody PackageLoadedRequest request) {
+        logger.info("Received package loaded notification for package: {}, truck: {}", 
+                request.getPackageId(), request.getTruckId());
+        
+        // Check if the message has already been processed
+        if (messageTrackingService.isMessageProcessed(request.getSeqNum())) {
+            logger.info("Duplicate message received with seq_num: {}", request.getSeqNum());
+            return ResponseEntity.ok().build();
+        }
+        
+        try {
+            // Find the package
+            Optional<Package> packageOpt = packageRepository.findById(request.getPackageId());
+            
+            if (packageOpt.isPresent()) {
+                Package pkg = packageOpt.get();
+                
+                // Update package status to LOADED
+                pkg.setStatus(PackageStatus.LOADED);
+                
+                // Set the truck if provided
+                if (request.getTruckId() != null) {
+                    Optional<Truck> truckOpt = truckRepository.findById(request.getTruckId());
+                    if (truckOpt.isPresent()) {
+                        pkg.setTruck(truckOpt.get());
+                    }
+                }
+                
+                packageRepository.save(pkg);
+                
+                logger.info("Updated package {} status to LOADED", pkg.getId());
+            } else {
+                logger.error("Package {} not found for package loaded notification", 
+                        request.getPackageId());
+            }
+        } catch (Exception e) {
+            logger.error("Error processing package loaded notification", e);
+        }
+        
+        // Mark the message as processed
+        messageTrackingService.markMessageProcessed(request.getSeqNum(), request.getMessageType());
+        
         return ResponseEntity.ok().build();
     }
     

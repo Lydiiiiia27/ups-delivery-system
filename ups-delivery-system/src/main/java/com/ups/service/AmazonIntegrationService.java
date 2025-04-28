@@ -86,3 +86,21 @@ public class AmazonIntegrationService {
         if (packageOpt.isEmpty() || truckOpt.isEmpty()) {
             logger.error("Package {} or Truck {} not found", packageId, truckId);
             return;
+        }
+        
+        Package pkg = packageOpt.get();
+        Truck truck = truckOpt.get();
+        
+        // Update package status to DELIVERED
+        pkg.setStatus(PackageStatus.DELIVERED);
+        packageRepository.save(pkg);
+        
+        // Notify Amazon about delivery completion
+        try {
+            amazonNotificationService.notifyDeliveryComplete(pkg, truck);
+            logger.info("Delivery completion notification sent to Amazon for package {}", packageId);
+        } catch (Exception e) {
+            logger.error("Failed to notify Amazon about delivery completion for package {}", packageId, e);
+        }
+    }
+}
