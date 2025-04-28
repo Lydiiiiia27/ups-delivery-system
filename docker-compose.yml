@@ -62,7 +62,7 @@ services:
       - UPS_INIT_TRUCKS=5
       - UPS_WORLD_SIM_SPEED=100
       - UPS_WORLD_CREATE_NEW=true
-      - AMAZON_SERVICE_URL=http://amazon:8080
+      - AMAZON_SERVICE_URL=${AMAZON_SERVICE_URL:-http://amazon:8080}
     ports:
       - "8080:8080"
     networks:
@@ -72,8 +72,9 @@ services:
       sh -c "
         ./wait-for-it.sh ups-db:5432 --timeout=30 --strict -- 
         ./wait-for-it.sh world-simulator:12345 --timeout=30 --strict -- 
-        java -jar app.jar
+        java -jar app.jar --spring.profiles.active=production
       "
+    restart: unless-stopped
 
 networks:
   ups-network:
